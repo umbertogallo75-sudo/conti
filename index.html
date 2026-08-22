@@ -430,6 +430,7 @@ const daConfermare = () => dati.rapporti.filter((r) => r.confirmation === "propo
 const PAGINE = [
   { id: "",           nome: "Situazione", conta: () => null },
   { id: "rapporti",   nome: "Rapporti",   conta: () => dati.rapporti.length },
+  { id: "analisi",    nome: "Analisi",    conta: () => null },
   { id: "movimenti",  nome: "Movimenti",  conta: () => dati.movimenti.length || null },
   { id: "solleciti",  nome: "Solleciti",  conta: () => scadute().length },
   { id: "documenti",  nome: "Documenti",  conta: () => dati.documenti.length },
@@ -1784,6 +1785,177 @@ function dettaglioMovimento(m) {
     </div>`;
 }
 
+/* ── Analisi ────────────────────────────────────────────────────────────────
+   Le domande che uno si fa davvero: dove sono finiti i soldi, da dove sono
+   arrivati, quanto si è mosso soltanto da una tasca all'altra.
+   Ogni riga porta ai movimenti che la compongono: nessun totale resta
+   un numero di cui fidarsi sulla parola.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+let annoAnalisi = "";
+
+const saldoConto = (idConto, filtro = () => true) => dati.scritture
+  .filter((s) => s.account_id === idConto && filtro(s))
+  .reduce((t, s) => t + BigInt(s.amount_minor), 0n);
+
+/** Il mittente di un accredito, quando il documento lo dichiara. */
+function mittenteDi(descrizione) {
+  const m = descrizione.match(/MITT\.?:\s*(.+?)(?:\s+COD[.\s]|\s+\d{10,}|\s+—|$)/i);
+  if (m) return m[1].trim().replace(/\s+/g, " ").slice(0, 44);
+  const d = descrizione.match(/disposto da:\s*—?\s*(.+?)(?:\s+COD|\s+\d{6,}|$)/i);
+  return d ? d[1].trim().slice(0, 44) : "senza mittente dichiarato";
+}
+
+function barra(parte, tutto, colore = "var(--accent)") {
+  const q = tutto === 0n ? 0 : Number((parte < 0n ? -parte : parte) * 1000n / (tutto < 0n ? -tutto : tutto)) / 10;
+  return `<div style="height:5px;background:var(--surface-2);border-radius:99px;overflow:hidden;margin-top:0.3rem">
+    <i style="display:block;height:100%;width:${Math.min(q, 100).toFixed(1)}%;background:${colore}"></i></div>`;
+}
+
+function paginaAnalisi() {
+  if (!dati.movimenti.length) {
+    return `<h2>Analisi</h2>${vuoto("Non ci sono ancora movimenti da analizzare.")}`;
+  }
+
+  const anni = [...new Set(dati.movimenti.map((m) => m.economic_date.slice(0, 4)))].sort().reverse();
+  const nelPeriodo = (t) => !annoAnalisi || t.economic_date.startsWith(annoAnalisi);
+  const movimenti = dati.movimenti.filter(nelPeriodo);
+  const idsPeriodo = new Set(movimenti.map((m) => m.id));
+  const scritturePeriodo = dati.scritture.filter((s) => idsPeriodo.has(s.transaction_id));
+
+  const perGenere = (kind) => {
+    const m = new Map();
+    for (const s of scritturePeriodo) {
+      const c = indice.perConto.get(s.account_id);
+      if (c?.kind !== kind) continue;
+      const k = c.category || c.name;
+      m.set(k, (m.get(k) ?? 0n) + BigInt(s.amount_minor));
+    }
+    return [...m.entries()].sort((a, b) => (a[1] < 0n ? -a[1] : a[1]) > (b[1] < 0n ? -b[1] : b[1]) ? -1 : 1);
+  };
+
+  const spesePerCat = perGenere("expense");
+  const entratePerCat = perGenere("income").map(([k, v]) => [k, -v]);
+  const speseTot = spesePerCat.reduce((t, [, v]) => t + v, 0n);
+  const entrateTot = entratePerCat.reduce((t, [, v]) => t + v, 0n);
+
+  // Le entrate, una per una, raggruppate per chi le ha mandate.
+  const perMittente = new Map();
+  for (const t of movimenti.filter((x) => x.event_type === "income")) {
+    const q = (indice.perMovimento.get(t.id) ?? [])
+      .filter((s) => indice.perConto.get(s.account_id)?.kind === "income")
+      .reduce((a, s) => a - BigInt(s.amount_minor), 0n);
+    if (q === 0n) continue;
+    const k = mittenteDi(t.description);
+    if (!perMittente.has(k)) perMittente.set(k, { n: 0, tot: 0n, ultima: t.economic_date });
+    const x = perMittente.get(k);
+    x.n++; x.tot += q;
+    if (t.economic_date > x.ultima) x.ultima = t.economic_date;
+  }
+  const mittenti = [...perMittente.entries()].sort((a, b) => b[1].tot > a[1].tot ? 1 : -1);
+
+  // Quanto si è soltanto spostato, senza essere né speso né incassato.
+  const interni = movimenti.filter((t) => !ECONOMICI.has(t.event_type));
+  const perTipoInterno = new Map();
+  for (const t of interni) {
+    const q = (indice.perMovimento.get(t.id) ?? [])
+      .filter((s) => BigInt(s.amount_minor) < 0n)
+      .reduce((a, s) => a - BigInt(s.amount_minor), 0n);
+    const k = EVENTO[t.event_type]?.nome ?? t.event_type;
+    if (!perTipoInterno.has(k)) perTipoInterno.set(k, { n: 0, tot: 0n });
+    const x = perTipoInterno.get(k); x.n++; x.tot += q;
+  }
+
+  const patrimoniali = dati.conti.filter((c) => ["asset_cash", "liability_credit"].includes(c.kind));
+  const sospeso = dati.conti.find((c) => c.kind === "suspense");
+
+  return `
+    <div class="card">
+      <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
+        <span style="font-size:0.86rem;color:var(--muted)">Periodo</span>
+        <select id="a-anno" style="flex:0 0 130px">
+          <option value="">Tutto</option>
+          ${anni.map((a) => `<option value="${esc(a)}"${annoAnalisi === a ? " selected" : ""}>${esc(a)}</option>`).join("")}
+        </select>
+        <span class="meta" style="margin:0"><span>${movimenti.length} movimenti</span></span>
+      </div>
+    </div>
+
+    <div class="tiles">
+      <a class="tile" href="#/movimenti" data-vai="evento:expense">
+        <div class="v">${formattaCentesimi(speseTot).replace(" €", "")}</div><div class="k">speso</div></a>
+      <a class="tile" href="#/movimenti" data-vai="evento:income">
+        <div class="v">${formattaCentesimi(entrateTot).replace(" €", "")}</div><div class="k">incassato</div></a>
+      <div class="tile"><div class="v">${formattaCentesimi(entrateTot - speseTot).replace(" €", "")}</div>
+        <div class="k">differenza</div></div>
+      <div class="tile"><div class="v">${interni.length}</div><div class="k">giri interni</div></div>
+    </div>
+
+    <h2>Dove sono finiti i soldi <span class="sub">${spesePerCat.length} categorie</span></h2>
+    ${spesePerCat.length ? spesePerCat.map(([cat, v]) => `
+      <div class="card" data-vai="categoria:${esc(cat)}" style="cursor:pointer">
+        <h3 style="justify-content:space-between">
+          <span>${esc(cat)}</span>
+          <span style="font-variant-numeric:tabular-nums">${formattaCentesimi(v)}</span></h3>
+        ${barra(v, speseTot, "var(--stop)")}
+        <div class="meta"><span>${speseTot === 0n ? "0" : (Number(v * 1000n / speseTot) / 10).toFixed(1)}% del totale</span>
+          <span>apri i movimenti</span></div>
+      </div>`).join("") : vuoto("Nessuna spesa nel periodo.")}
+
+    <h2>Da dove sono arrivati <span class="sub">${mittenti.length} mittenti</span></h2>
+    ${entratePerCat.length ? `<div class="card">
+      <div class="meta">${entratePerCat.map(([k, v]) =>
+        `<span>${esc(k)}: <strong>${formattaCentesimi(v)}</strong></span>`).join("")}</div>
+    </div>` : ""}
+    ${mittenti.length ? mittenti.slice(0, 40).map(([chi, x]) => `
+      <div class="card" data-vai="cerca:${esc(chi.slice(0, 22))}" style="cursor:pointer">
+        <h3 style="justify-content:space-between">
+          <span>${esc(chi)}</span>
+          <span style="font-variant-numeric:tabular-nums">${formattaCentesimi(x.tot)}</span></h3>
+        ${barra(x.tot, entrateTot, "var(--ok)")}
+        <div class="meta"><span>${x.n} accredit${x.n === 1 ? "o" : "i"}</span>
+          <span>ultimo il ${dataBreve(x.ultima)}</span>
+          <span>${entrateTot === 0n ? "0" : (Number(x.tot * 1000n / entrateTot) / 10).toFixed(1)}%</span></div>
+      </div>`).join("") : vuoto("Nessun accredito nel periodo.")}
+    ${mittenti.length > 40 ? `<div class="note">Mostrati i primi 40 di ${mittenti.length}.</div>` : ""}
+
+    <h2>Quanto si è solo spostato <span class="sub">non è né speso né incassato</span></h2>
+    <div class="card">
+      <div class="scorri"><table class="dati">
+        <thead><tr><th>Tipo</th><th class="num">Quante volte</th><th class="num">Importo</th></tr></thead>
+        <tbody>${[...perTipoInterno.entries()].sort((a, b) => b[1].tot > a[1].tot ? 1 : -1).map(([k, x]) =>
+          `<tr><td>${esc(k)}</td><td class="num">${x.n}</td><td class="num">${formattaCentesimi(x.tot)}</td></tr>`).join("")}</tbody>
+      </table></div>
+      <div class="note proof">Questi importi non compaiono nelle spese, ed è voluto: sono lo stesso denaro
+      visto due volte. Se comparissero, la spesa risulterebbe più che raddoppiata.</div>
+    </div>
+
+    <h2>I conti e le carte</h2>
+    ${patrimoniali.map((c) => {
+      const saldo = saldoConto(c.id);
+      const suoi = dati.scritture.filter((s) => s.account_id === c.id).length;
+      return `<div class="card" data-vai="conto:${esc(c.id)}" style="cursor:pointer">
+        <h3 style="justify-content:space-between">
+          <span>${esc(c.name)}</span>
+          <span style="font-variant-numeric:tabular-nums">${formattaCentesimi(saldo)}</span></h3>
+        <div class="meta">
+          <span>${esc(c.kind === "liability_credit" ? "debito di carta" : "liquidità")}</span>
+          <span>${suoi} movimenti</span>
+          <span>apri</span></div>
+      </div>`;
+    }).join("")}
+
+    ${sospeso ? `
+      <h2>Da attribuire <span class="sub">quello che manca per chiudere il cerchio</span></h2>
+      <div class="card" data-vai="conto:${esc(sospeso.id)}" style="cursor:pointer">
+        <h3 style="justify-content:space-between"><span>Denaro uscito verso conti di cui non ho i documenti</span>
+          <span style="font-variant-numeric:tabular-nums">${formattaCentesimi(saldoConto(sospeso.id))}</span></h3>
+        <div class="note risk">Non è spesa e non finge di esserlo. Caricando gli estratti dei conti di
+        destinazione — Sella, Wise, Revolut — questa cifra si chiude da sola.</div>
+      </div>` : ""}
+  `;
+}
+
 /* ── Carica ─────────────────────────────────────────────────────────────── */
 
 function paginaCarica() {
@@ -2046,7 +2218,8 @@ function disegna() {
   disegnaTabs(p === "rapporto" ? "rapporti" : (p || ""));
   const main = document.getElementById("pagina");
   const corpi = {
-    "": paginaSituazione, rapporti: paginaRapporti, movimenti: paginaMovimenti, solleciti: paginaSolleciti,
+    "": paginaSituazione, rapporti: paginaRapporti, analisi: paginaAnalisi,
+    movimenti: paginaMovimenti, solleciti: paginaSolleciti,
     documenti: paginaDocumenti, carica: paginaCarica, impostazioni: paginaImpostazioni,
   };
   main.innerHTML = p === "rapporto" ? paginaRapporto(arg) : (corpi[p] ?? paginaSituazione)();
@@ -2101,6 +2274,10 @@ function collega(p, arg) {
     }
   }
 
+  if (p === "analisi") {
+    document.getElementById("a-anno").onchange = (e) => { annoAnalisi = e.target.value; disegna(); };
+  }
+
   if (p === "movimenti") {
     const agg = (campo) => (e) => { filtroMov[campo] = e.target.value; apertoMov = null; disegna(); };
     for (const [id, campo] of [["m-conto", "conto"], ["m-evento", "evento"],
@@ -2133,6 +2310,23 @@ function collega(p, arg) {
   }
 
   document.getElementById("pagina").onclick = async (e) => {
+    // Dall'analisi ai movimenti che compongono quel numero: un totale che
+    // non si può aprire è un totale di cui bisogna fidarsi sulla parola.
+    const salto = e.target.closest("[data-vai]");
+    if (salto) {
+      e.preventDefault();
+      const [che, ...resto] = salto.dataset.vai.split(":");
+      const valore = resto.join(":");
+      filtroMov = { conto: "", evento: "", categoria: "", anno: annoAnalisi, cerca: "" };
+      if (che === "conto") filtroMov.conto = valore;
+      if (che === "evento") filtroMov.evento = valore;
+      if (che === "categoria") filtroMov.categoria = valore;
+      if (che === "cerca") filtroMov.cerca = valore;
+      apertoMov = null;
+      location.hash = "#/movimenti";
+      return;
+    }
+
     const scheda = e.target.closest("[data-movimento]");
     if (scheda && !e.target.closest("button")) {
       apertoMov = apertoMov === scheda.dataset.movimento ? null : scheda.dataset.movimento;
