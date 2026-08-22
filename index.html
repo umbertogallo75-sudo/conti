@@ -299,10 +299,27 @@ async function chiama(percorso, opzioni = {}) {
   return r;
 }
 
+/**
+ * Legge una tabella per intero.
+ *
+ * Il database restituisce al massimo mille righe per volta. Fermarsi li'
+ * significherebbe mostrare i primi mille movimenti e chiamarli «tutti»: i
+ * totali sarebbero sbagliati senza che niente lo segnali. Si legge a blocchi
+ * finche' non arriva un blocco corto.
+ */
 async function leggi(tabella, query = "") {
-  const r = await chiama(`/rest/v1/${tabella}?${query}`);
-  if (!r.ok) throw new Error(`${tabella}: ${await r.text()}`);
-  return r.json();
+  const BLOCCO = 1000;
+  const tutto = [];
+  for (let da = 0; ; da += BLOCCO) {
+    const r = await chiama(`/rest/v1/${tabella}?${query}`, {
+      headers: { range: `${da}-${da + BLOCCO - 1}`, "range-unit": "items" },
+    });
+    if (!r.ok) throw new Error(`${tabella}: ${await r.text()}`);
+    const blocco = await r.json();
+    tutto.push(...blocco);
+    if (blocco.length < BLOCCO) return tutto;
+    if (da > 200000) return tutto;   // rete di sicurezza contro un ciclo infinito
+  }
 }
 
 async function scrivi(tabella, righe, { fondi = true, conflitto = "" } = {}) {
@@ -359,10 +376,12 @@ async function traccia(azione, genere, soggetto, motivo) {
 const dati = {
   rapporti: [], identificativi: [], strumenti: [], documenti: [],
   file: [], copertura: [], attese: [], legami: [], sconosciuti: [],
+  conti: [], movimenti: [], scritture: [], nessi: [],
 };
 
 async function ricarica() {
-  const [rapporti, identificativi, strumenti, documenti, file, copertura, attese, legami, sconosciuti] =
+  const [rapporti, identificativi, strumenti, documenti, file, copertura, attese, legami, sconosciuti,
+         conti, movimenti, scritture, nessi] =
     await Promise.all([
       leggi("relationship", "select=*&order=institution_label,display_name"),
       leggi("relationship_identifier", "select=*"),
@@ -373,9 +392,32 @@ async function ricarica() {
       leggi("document_expectation", "select=*&order=due_on"),
       leggi("document_relationship", "select=*"),
       leggi("undocumented_relationship", "select=*"),
+      leggi("ledger_account", "select=*&order=kind,name"),
+      leggi("ledger_transaction", "select=*&order=economic_date.desc"),
+      leggi("ledger_posting", "select=*"),
+      leggi("transaction_link", "select=*"),
     ]);
-  Object.assign(dati, { rapporti, identificativi, strumenti, documenti, file, copertura, attese, legami, sconosciuti });
+  Object.assign(dati, { rapporti, identificativi, strumenti, documenti, file, copertura, attese, legami, sconosciuti,
+    conti, movimenti, scritture, nessi });
+
+  // Indici: con qualche migliaio di movimenti, cercare ogni volta a scansione
+  // rende la pagina lenta a ogni battuta nel campo di ricerca.
+  indice.perMovimento = new Map();
+  for (const s of scritture) {
+    if (!indice.perMovimento.has(s.transaction_id)) indice.perMovimento.set(s.transaction_id, []);
+    indice.perMovimento.get(s.transaction_id).push(s);
+  }
+  indice.perConto = new Map(conti.map((c) => [c.id, c]));
+  indice.legatiA = new Map();
+  for (const l of nessi) {
+    for (const [a, b] of [[l.from_id, l.to_id], [l.to_id, l.from_id]]) {
+      if (!indice.legatiA.has(a)) indice.legatiA.set(a, []);
+      indice.legatiA.get(a).push({ id: b, kind: l.kind, rationale: l.rationale });
+    }
+  }
 }
+
+const indice = { perMovimento: new Map(), perConto: new Map(), legatiA: new Map() };
 
 const perRapporto = (id) => dati.rapporti.find((r) => r.id === id);
 const scadute = () => dati.attese.filter((a) => a.state === "overdue");
@@ -388,6 +430,7 @@ const daConfermare = () => dati.rapporti.filter((r) => r.confirmation === "propo
 const PAGINE = [
   { id: "",           nome: "Situazione", conta: () => null },
   { id: "rapporti",   nome: "Rapporti",   conta: () => dati.rapporti.length },
+  { id: "movimenti",  nome: "Movimenti",  conta: () => dati.movimenti.length || null },
   { id: "solleciti",  nome: "Solleciti",  conta: () => scadute().length },
   { id: "documenti",  nome: "Documenti",  conta: () => dati.documenti.length },
   { id: "carica",     nome: "Carica",     conta: () => null },
@@ -1567,6 +1610,180 @@ function paginaDocumenti() {
   `;
 }
 
+/* ── Movimenti ──────────────────────────────────────────────────────────────
+   Qui vale la regola che tiene in piedi tutto: la spesa e' quella e una sola
+   volta. Le righe «PayPal» sul conto e gli addebiti delle carte NON sono
+   spese — sono lo stesso denaro visto da un'altra parte — e aprendole si
+   arriva alla spesa vera.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+const EVENTO = {
+  expense: { nome: "spesa", badge: "stop" },
+  income: { nome: "entrata", badge: "ok" },
+  internal_transfer: { nome: "giro interno", badge: "mute" },
+  card_settlement: { nome: "saldo carta", badge: "mute" },
+  prepaid_top_up: { nome: "ricarica", badge: "mute" },
+};
+const ECONOMICI = new Set(["expense", "income"]);
+
+let filtroMov = { conto: "", evento: "", categoria: "", anno: "", cerca: "" };
+let apertoMov = null;
+
+const scrittureDi = (id) => indice.perMovimento.get(id) ?? [];
+const contiDi = (id) => scrittureDi(id).map((s) => indice.perConto.get(s.account_id)).filter(Boolean);
+const importoSu = (id, filtro) => {
+  const s = scrittureDi(id).find((x) => filtro(indice.perConto.get(x.account_id)));
+  return s ? BigInt(s.amount_minor) : null;
+};
+/** L'importo che caratterizza il movimento: quello sul conto o sulla carta. */
+const importoMov = (id) => {
+  const s = scrittureDi(id).find((x) => ["asset_cash", "liability_credit"].includes(indice.perConto.get(x.account_id)?.kind));
+  return s ? BigInt(s.amount_minor) : (BigInt(scrittureDi(id)[0]?.amount_minor ?? 0));
+};
+
+function paginaMovimenti() {
+  if (!dati.movimenti.length) {
+    return `<h2>Movimenti</h2>${vuoto("Non ci sono ancora movimenti. Si caricano da «Impostazioni».")}`;
+  }
+
+  const patrimoniali = dati.conti.filter((c) => ["asset_cash", "liability_credit"].includes(c.kind));
+  const categorie = [...new Set(dati.conti.filter((c) => c.kind === "expense").map((c) => c.category))].filter(Boolean).sort();
+  const anni = [...new Set(dati.movimenti.map((m) => m.economic_date.slice(0, 4)))].sort().reverse();
+
+  const elenco = dati.movimenti.filter((m) => {
+    if (filtroMov.evento && m.event_type !== filtroMov.evento) return false;
+    if (filtroMov.anno && !m.economic_date.startsWith(filtroMov.anno)) return false;
+    if (filtroMov.conto && !scrittureDi(m.id).some((s) => s.account_id === filtroMov.conto)) return false;
+    if (filtroMov.categoria && !contiDi(m.id).some((c) => c.category === filtroMov.categoria)) return false;
+    if (filtroMov.cerca && !m.description.toLowerCase().includes(filtroMov.cerca.toLowerCase())) return false;
+    return true;
+  });
+
+  // I totali si calcolano SEMPRE dai conti economici, mai sommando le righe:
+  // sommare le righe rimetterebbe dentro i giri interni.
+  let spese = 0n, entrate = 0n, interni = 0;
+  for (const m of elenco) {
+    if (m.event_type === "expense") spese += scrittureDi(m.id)
+      .filter((s) => indice.perConto.get(s.account_id)?.kind === "expense")
+      .reduce((s, x) => s + BigInt(x.amount_minor), 0n);
+    else if (m.event_type === "income") entrate += scrittureDi(m.id)
+      .filter((s) => indice.perConto.get(s.account_id)?.kind === "income")
+      .reduce((s, x) => s - BigInt(x.amount_minor), 0n);
+    else interni++;
+  }
+
+  const righe = elenco.slice(0, 250);
+
+  return `
+    <div class="card">
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.5rem">
+        <select id="m-conto" style="flex:1;min-width:150px">
+          <option value="">Tutti i conti e le carte</option>
+          ${patrimoniali.map((c) => `<option value="${esc(c.id)}"${filtroMov.conto === c.id ? " selected" : ""}>${esc(c.name)}</option>`).join("")}
+        </select>
+        <select id="m-evento" style="flex:1;min-width:140px">
+          <option value="">Tutti i tipi</option>
+          ${Object.entries(EVENTO).map(([k, v]) => `<option value="${esc(k)}"${filtroMov.evento === k ? " selected" : ""}>${esc(v.nome)}</option>`).join("")}
+        </select>
+      </div>
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.5rem">
+        <select id="m-categoria" style="flex:1;min-width:150px">
+          <option value="">Tutte le categorie</option>
+          ${categorie.map((c) => `<option value="${esc(c)}"${filtroMov.categoria === c ? " selected" : ""}>${esc(c)}</option>`).join("")}
+        </select>
+        <select id="m-anno" style="flex:0 0 110px">
+          <option value="">Ogni anno</option>
+          ${anni.map((a) => `<option value="${esc(a)}"${filtroMov.anno === a ? " selected" : ""}>${esc(a)}</option>`).join("")}
+        </select>
+      </div>
+      <input type="text" id="m-cerca" placeholder="Cerca nella descrizione…" value="${esc(filtroMov.cerca)}">
+    </div>
+
+    <div class="tiles">
+      <div class="tile"><div class="v">${formattaCentesimi(spese).replace(" €", "")}</div><div class="k">spese nel filtro</div></div>
+      <div class="tile"><div class="v">${formattaCentesimi(entrate).replace(" €", "")}</div><div class="k">entrate nel filtro</div></div>
+      <div class="tile"><div class="v">${interni}</div><div class="k">giri interni, non spesa</div></div>
+      <div class="tile"><div class="v">${elenco.length}</div><div class="k">movimenti</div></div>
+    </div>
+
+    <div class="note proof">I giri interni — ricariche di PayPal, saldi delle carte, girocontò — non entrano nelle
+    spese: sono lo stesso denaro visto da un'altra parte. Aprili per vedere dov'è finito davvero.</div>
+
+    <h2>Movimenti <span class="sub">${righe.length} di ${elenco.length}</span></h2>
+    ${righe.map((m) => {
+      const ev = EVENTO[m.event_type] ?? { nome: m.event_type, badge: "mute" };
+      const imp = importoMov(m.id);
+      const legati = indice.legatiA.get(m.id) ?? [];
+      const conti = contiDi(m.id).filter((c) => ["asset_cash", "liability_credit"].includes(c.kind));
+      const aperto = apertoMov === m.id;
+
+      return `
+        <div class="card" data-movimento="${esc(m.id)}" style="cursor:pointer">
+          <h3 style="justify-content:space-between">
+            <span style="flex:1;min-width:0">${esc(m.description.slice(0, 90))}</span>
+            <span style="font-variant-numeric:tabular-nums;white-space:nowrap">${formattaCentesimi(imp)}</span>
+          </h3>
+          <div class="meta">
+            <span>${dataBreve(m.economic_date)}</span>
+            <span class="badge ${ev.badge}">${esc(ev.nome)}</span>
+            ${conti.map((c) => `<span>${esc(c.name)}</span>`).join("")}
+            ${legati.length ? `<span class="badge ok">${legati.length} corrispondenz${legati.length === 1 ? "a" : "e"}</span>` : ""}
+          </div>
+          ${aperto ? dettaglioMovimento(m) : ""}
+        </div>`;
+    }).join("")}
+    ${elenco.length > 250 ? `<div class="note">Mostrati i primi 250. Restringi con i filtri.</div>` : ""}
+  `;
+}
+
+function dettaglioMovimento(m) {
+  const s = scrittureDi(m.id);
+  const legati = indice.legatiA.get(m.id) ?? [];
+
+  const catena = legati.map((l) => {
+    const altro = dati.movimenti.find((x) => x.id === l.id);
+    if (!altro) return "";
+    const suoiLegami = (indice.legatiA.get(altro.id) ?? []).filter((x) => x.id !== m.id);
+    const nipoti = suoiLegami.map((x) => dati.movimenti.find((y) => y.id === x.id)).filter(Boolean);
+    const ev = EVENTO[altro.event_type] ?? { nome: altro.event_type, badge: "mute" };
+    return `
+      <div class="card" style="margin:0.5rem 0 0">
+        <h3><span class="badge ${ev.badge}">${esc(ev.nome)}</span> ${esc(altro.description.slice(0, 80))}</h3>
+        <div class="meta">
+          <span>${dataBreve(altro.economic_date)}</span>
+          <span>${formattaCentesimi(importoMov(altro.id))}</span>
+          ${contiDi(altro.id).filter((c) => c.kind !== "expense" && c.kind !== "income").map((c) => `<span>${esc(c.name)}</span>`).join("")}
+        </div>
+        <div class="note proof">${esc(l.rationale)}</div>
+        ${nipoti.map((n) => `<div class="note"><strong>${esc(EVENTO[n.event_type]?.nome ?? n.event_type)}</strong> —
+          ${esc(n.description.slice(0, 80))} · ${formattaCentesimi(importoMov(n.id))} · ${dataBreve(n.economic_date)}</div>`).join("")}
+      </div>`;
+  }).join("");
+
+  return `
+    <div style="margin-top:0.7rem;border-top:1px solid var(--border);padding-top:0.7rem">
+      <div class="scorri"><table class="dati">
+        <thead><tr><th>Conto</th><th>Tipo</th><th class="num">Importo</th></tr></thead>
+        <tbody>${s.map((x) => {
+          const c = indice.perConto.get(x.account_id);
+          return `<tr><td>${esc(c?.name ?? "—")}</td>
+            <td>${esc({ asset_cash: "liquidità", liability_credit: "debito di carta", expense: "spesa",
+              income: "entrata", suspense: "da attribuire", asset_securities: "titoli",
+              equity_opening: "apertura" }[c?.kind] ?? c?.kind ?? "")}</td>
+            <td class="num">${formattaCentesimi(BigInt(x.amount_minor), x.currency)}</td></tr>`;
+        }).join("")}</tbody>
+      </table></div>
+
+      ${ECONOMICI.has(m.event_type)
+        ? `<div class="note risk">Questo è un evento economico: entra nei totali di spesa o di entrata.</div>`
+        : `<div class="note proof">Questo non è una spesa: è denaro che si è spostato fra cose tue.
+           Nei totali non compare, ed è voluto.</div>`}
+
+      ${catena ? `<p style="font-size:0.86rem;margin-top:0.7rem"><strong>Dove porta:</strong></p>${catena}`
+        : `<div class="note">Nessuna corrispondenza trovata per questo movimento.</div>`}
+    </div>`;
+}
+
 /* ── Carica ─────────────────────────────────────────────────────────────── */
 
 function paginaCarica() {
@@ -1780,7 +1997,8 @@ async function importaAnalisi(file) {
     const contenuto = JSON.parse(await file.text());
     if (contenuto.versione !== 1 || !contenuto.ordine) throw new Error("Il file non ha il formato atteso.");
 
-    const CONFLITTI = { document_relationship: "owner,document_id,relationship_id" };
+    const CONFLITTI = { document_relationship: "owner,document_id,relationship_id",
+                        transaction_link: "owner,from_id,to_id,kind" };
     const totale = contenuto.ordine.length;
     let righeTotali = 0;
 
@@ -1828,7 +2046,7 @@ function disegna() {
   disegnaTabs(p === "rapporto" ? "rapporti" : (p || ""));
   const main = document.getElementById("pagina");
   const corpi = {
-    "": paginaSituazione, rapporti: paginaRapporti, solleciti: paginaSolleciti,
+    "": paginaSituazione, rapporti: paginaRapporti, movimenti: paginaMovimenti, solleciti: paginaSolleciti,
     documenti: paginaDocumenti, carica: paginaCarica, impostazioni: paginaImpostazioni,
   };
   main.innerHTML = p === "rapporto" ? paginaRapporto(arg) : (corpi[p] ?? paginaSituazione)();
@@ -1881,6 +2099,30 @@ function collega(p, arg) {
         } catch { /* scelta annullata */ }
       };
     }
+  }
+
+  if (p === "movimenti") {
+    const agg = (campo) => (e) => { filtroMov[campo] = e.target.value; apertoMov = null; disegna(); };
+    for (const [id, campo] of [["m-conto", "conto"], ["m-evento", "evento"],
+                               ["m-categoria", "categoria"], ["m-anno", "anno"]])
+      document.getElementById(id).onchange = agg(campo);
+    const c = document.getElementById("m-cerca");
+    let att;
+    c.oninput = (e) => {
+      clearTimeout(att);
+      const v = e.target.value;
+      att = setTimeout(() => {
+        filtroMov.cerca = v; apertoMov = null; disegna();
+        const q = document.getElementById("m-cerca");
+        q.focus(); q.setSelectionRange(v.length, v.length);
+      }, 350);
+    };
+    document.getElementById("pagina").addEventListener("click", (e) => {
+      const card = e.target.closest("[data-movimento]");
+      if (!card || e.target.closest("button")) return;
+      apertoMov = apertoMov === card.dataset.movimento ? null : card.dataset.movimento;
+      disegna();
+    });
   }
 
   if (p === "documenti") {
