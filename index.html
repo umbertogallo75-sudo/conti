@@ -2117,12 +2117,6 @@ function collega(p, arg) {
         q.focus(); q.setSelectionRange(v.length, v.length);
       }, 350);
     };
-    document.getElementById("pagina").addEventListener("click", (e) => {
-      const card = e.target.closest("[data-movimento]");
-      if (!card || e.target.closest("button")) return;
-      apertoMov = apertoMov === card.dataset.movimento ? null : card.dataset.movimento;
-      disegna();
-    });
   }
 
   if (p === "documenti") {
@@ -2139,6 +2133,15 @@ function collega(p, arg) {
   }
 
   document.getElementById("pagina").onclick = async (e) => {
+    const scheda = e.target.closest("[data-movimento]");
+    if (scheda && !e.target.closest("button")) {
+      apertoMov = apertoMov === scheda.dataset.movimento ? null : scheda.dataset.movimento;
+      disegna();
+      if (apertoMov) document.querySelector(`[data-movimento="${apertoMov}"]`)
+        ?.scrollIntoView({ block: "center", behavior: "smooth" });
+      return;
+    }
+
     const b = e.target.closest("button");
     if (!b) return;
     const d = b.dataset;
