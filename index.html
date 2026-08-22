@@ -518,6 +518,8 @@ const PROVE_DEBOLI = new Set(["summary_document", "service_notice", "contract_ch
   "transfer_receipt", "tax_receipt", "unknown"]);
 
 const identDi = (id) => dati.identificativi.filter((i) => i.relationship_id === id);
+const strumentiDi = (id) => dati.strumenti.filter((s) => s.relationship_id === id);
+const strumento = (id) => dati.strumenti.find((s) => s.id === id);
 const documentiDi = (id) => {
   const ids = new Set(dati.legami.filter((l) => l.relationship_id === id).map((l) => l.document_id));
   return dati.documenti.filter((d) => ids.has(d.id));
@@ -584,6 +586,34 @@ function diagnosi(r) {
         ? "Il documento di sintesi viene emesso per ogni prodotto — conto, carta, dossier — non solo per i conti. Trovarne uno non dimostra che esista un conto a sé."
         : "Un documento di questo tipo cita un numero di rapporto, ma non basta a dimostrare che sia un rapporto separato.",
     });
+  }
+
+  // Una successione di carte che ATTRAVERSA due rapporti: il motore ha
+  // riconosciuto che la carta nuova continua quella vecchia, ma le due carte
+  // stanno sotto rapporti diversi. Se e' davvero la stessa linea di credito,
+  // tenerli separati spezza in due lo storico e fa comparire dal nulla un
+  // debito che invece era gia' li'.
+  for (const s of strumentiDi(r.id)) {
+    const prec = s.replaces_id ? strumento(s.replaces_id) : null;
+    if (prec && prec.relationship_id && prec.relationship_id !== r.id) {
+      avvisi.push({
+        gravita: "stop", genere: "successione", altroId: prec.relationship_id,
+        titolo: `La carta ${s.masked_pan} continua ${prec.masked_pan}, che sta in un altro rapporto`,
+        dettaglio: perRapporto(prec.relationship_id)?.display_name ?? "—",
+        spiegazione: s.succession_proof || "Le due serie si susseguono senza sovrapposizione.",
+      });
+    }
+  }
+  for (const s of dati.strumenti) {
+    const prec = s.replaces_id ? strumento(s.replaces_id) : null;
+    if (prec && prec.relationship_id === r.id && s.relationship_id && s.relationship_id !== r.id) {
+      avvisi.push({
+        gravita: "stop", genere: "successione", altroId: s.relationship_id,
+        titolo: `La carta ${prec.masked_pan} sembra proseguire in ${s.masked_pan}, sotto un altro rapporto`,
+        dettaglio: perRapporto(s.relationship_id)?.display_name ?? "—",
+        spiegazione: s.succession_proof || "Le due serie si susseguono senza sovrapposizione.",
+      });
+    }
   }
 
   // Documenti che non c'entrano con il genere dichiarato.
@@ -737,7 +767,12 @@ function paginaRapporto(id) {
           <button class="act ghost" data-rifiuta="${esc(r.id)}">Non è mio</button>
         </div>` : `<div class="note proof">Stato: ${esc(
           r.confirmation === "user_confirmed" ? "confermato da te" : "archiviato")}</div>`}
+      <div class="actions">
+        <button class="act ghost" data-unisci="${esc(r.id)}">Unisci a un altro rapporto</button>
+        <button class="act ghost" data-tipo="${esc(r.id)}">Cambia tipo</button>
+      </div>
     </div>
+    <div id="modulo-azione"></div>
 
     ${avvisi.length ? `
       <h2>Cosa non torna <span class="sub">${avvisi.length}</span></h2>
@@ -748,6 +783,8 @@ function paginaRapporto(id) {
           <div class="note ${a.gravita === "stop" ? "stop" : "risk"}">${esc(a.spiegazione)}</div>
           ${a.genere === "fusione" || a.genere === "serie" ? `
             <div class="actions"><button class="act" data-separa="${esc(r.id)}">Separali</button></div>` : ""}
+          ${a.genere === "successione" ? `
+            <div class="actions"><button class="act" data-unisci="${esc(r.id)}" data-con="${esc(a.altroId)}">Sì, è lo stesso rapporto</button></div>` : ""}
           ${a.genere === "estranei" ? `
             <div class="actions"><button class="act" data-estranei="${esc(r.id)}">Sposta i documenti estranei</button></div>` : ""}
           ${a.genere === "fantasma" ? `
@@ -756,7 +793,6 @@ function paginaRapporto(id) {
               <button class="act ghost" data-tipo="${esc(r.id)}">È un altro tipo di rapporto</button>
             </div>` : ""}
         </div>`).join("")}
-      <div id="modulo-azione"></div>
     ` : `<div class="note proof" style="margin-top:1rem">Nessuna contraddizione fra quello che questo rapporto dichiara di essere e i documenti che ha sotto.</div>`}
 
     <h2>Identificativi <span class="sub">${ident.length}</span></h2>
@@ -780,6 +816,7 @@ function paginaRapporto(id) {
           ${s.replaces_id ? `<span>sostituisce <code>${esc(dati.strumenti.find((x) => x.id === s.replaces_id)?.masked_pan ?? "—")}</code></span>` : ""}
         </div>
         ${s.succession_proof ? `<div class="note">${esc(s.succession_proof)}</div>` : ""}
+        <div class="actions"><button class="act ghost" data-rimuovi-carta="${esc(s.id)}">Questa carta non esiste, toglila</button></div>
       </div>`).join("")}` : ""}
 
     <h2>Documenti <span class="sub">${docs.length}</span></h2>
@@ -899,19 +936,51 @@ function paginaSolleciti() {
 
 function moduloSostituzione(idRapporto) {
   const r = perRapporto(idRapporto);
-  const strum = dati.strumenti.filter((s) => s.relationship_id === idRapporto);
+  const strum = strumentiDi(idRapporto);
   const ultima = strum.length ? strum[strum.length - 1] : null;
+
+  // Le carte che il sistema conosce gia' presso lo stesso istituto e che non
+  // stanno gia' sotto questo rapporto. Sceglierne una e' molto meno soggetto
+  // a errore che digitare quattro cifre a memoria — e nove volte su dieci la
+  // carta nuova e' gia' nei documenti caricati.
+  const altrove = dati.strumenti.filter((s) =>
+    s.institution_key === r.institution_key && s.relationship_id !== idRapporto);
+
   return `
     <div class="card" style="margin-top:0.7rem;background:var(--surface-2)">
       <h3>Carta sostitutiva</h3>
       <p>Il rapporto con ${esc(r.institution_label || r.institution_key)} continua, ma con una carta nuova.
       ${ultima ? `La precedente era <code>${esc(ultima.masked_pan)}</code>.` : ""}</p>
-      <label class="campo"><span>Ultime quattro cifre della carta nuova</span>
-        <input type="text" id="pan-${esc(idRapporto)}" inputmode="numeric" maxlength="4" placeholder="1234"></label>
-      <label class="campo"><span>Da quando è in uso (se lo sai)</span>
-        <input type="text" id="dal-${esc(idRapporto)}" placeholder="gg.mm.aaaa" inputmode="numeric"></label>
+
+      ${altrove.length ? `
+        <p style="color:var(--text);font-size:0.88rem"><strong>È una di queste?</strong>
+        Sono carte dello stesso istituto già presenti nei tuoi documenti.</p>
+        ${altrove.map((s) => `
+          <label class="card" style="display:block;cursor:pointer;margin-bottom:0.4rem">
+            <span style="display:flex;gap:0.6rem;align-items:center">
+              <input type="radio" name="scelta-${esc(idRapporto)}" value="${esc(s.id)}">
+              <span><code>${esc(s.masked_pan)}</code>
+                <span class="meta" style="margin-top:0.15rem"><span>${esc(
+                  perRapporto(s.relationship_id)?.display_name ?? "—")}</span></span></span>
+            </span>
+          </label>`).join("")}
+        <label class="card" style="display:block;cursor:pointer;margin-bottom:0.4rem">
+          <span style="display:flex;gap:0.6rem;align-items:center">
+            <input type="radio" name="scelta-${esc(idRapporto)}" value="nuova" checked>
+            <span>No, è una carta che non compare ancora nei documenti</span>
+          </span>
+        </label>` : ""}
+
+      <div id="nuova-${esc(idRapporto)}">
+        <label class="campo"><span>Le ultime quattro cifre — quelle <strong>in fondo</strong> al numero</span>
+          <input type="text" id="pan-${esc(idRapporto)}" inputmode="numeric" maxlength="4" placeholder="1234"></label>
+        <label class="campo"><span>Da quando è in uso (se lo sai)</span>
+          <input type="text" id="dal-${esc(idRapporto)}" placeholder="gg.mm.aaaa" inputmode="numeric"></label>
+      </div>
+
       <div class="note">Non chiedo mai il numero completo, né il codice di sicurezza, né il PIN. Le ultime quattro
-      cifre bastano a riconoscere la carta nei documenti e non permettono di usarla.</div>
+      cifre bastano a riconoscere la carta nei documenti e non permettono di usarla. Se il numero è lungo,
+      come su American Express, sono comunque le <strong>ultime</strong> quattro, non le prime.</div>
       <div class="actions">
         <button class="act" data-salva-sostituzione="${esc(idRapporto)}">Registra la sostituzione</button>
         <button class="act ghost" data-annulla="${esc(idRapporto)}">Annulla</button>
@@ -920,12 +989,54 @@ function moduloSostituzione(idRapporto) {
     </div>`;
 }
 
+const avvisati = new Set();
+
 async function registraSostituzione(idRapporto) {
   const box = document.getElementById(`esito-${idRapporto}`);
+  const scelta = document.querySelector(`input[name="scelta-${idRapporto}"]:checked`)?.value ?? "nuova";
+
+  // Se la carta nuova e' una che il sistema conosce gia', non e' una carta da
+  // registrare: sono due rapporti che vanno uniti. Registrarla di nuovo
+  // creerebbe un doppione e lascerebbe lo storico spezzato lo stesso.
+  if (scelta !== "nuova") {
+    const s = strumento(scelta);
+    box.innerHTML = `<div class="avviso ok">Allora questi due sono lo stesso rapporto: apro l'unione.</div>`;
+    setTimeout(() => { location.hash = `#/rapporto/${idRapporto}`; disegna();
+      setTimeout(() => mostraUnione(idRapporto, s?.relationship_id ?? ""), 300); }, 700);
+    return;
+  }
+
   const pan = (document.getElementById(`pan-${idRapporto}`).value || "").replace(/\D/g, "");
   const dalGrezzo = (document.getElementById(`dal-${idRapporto}`).value || "").trim();
 
   if (pan.length !== 4) { box.innerHTML = `<div class="avviso err">Servono esattamente quattro cifre.</div>`; return; }
+
+  // Due controlli contro l'errore piu' facile: leggere le cifre dalla parte
+  // sbagliata del numero. Sono avvisi, non divieti: una carta puo' davvero
+  // finire con quelle cifre, e in quel caso basta ripremere.
+  const r0 = perRapporto(idRapporto);
+  let sospetto = null;
+
+  const inizioDiUnaNota = dati.strumenti.find((s) =>
+    s.institution_key === r0?.institution_key &&
+    /^\d{4}/.test(s.masked_pan) && s.masked_pan.slice(0, 4) === pan);
+  if (inizioDiUnaNota) {
+    sospetto = `<code>${esc(pan)}</code> sono le <strong>prime</strong> quattro cifre di
+      <code>${esc(inizioDiUnaNota.masked_pan)}</code>, non le ultime.`;
+  } else if (r0?.institution_key === "AMEX" && /^3[47]/.test(pan)) {
+    // Le carte American Express cominciano tutte per 34 o 37 e sono lunghe
+    // quindici cifre. Quattro cifre che cominciano cosi' sono quasi sempre
+    // l'inizio del numero, non la fine.
+    sospetto = `Le carte American Express cominciano per 34 o 37: <code>${esc(pan)}</code> sembra
+      l'<strong>inizio</strong> del numero, non la fine.`;
+  }
+
+  if (sospetto && !avvisati.has(idRapporto)) {
+    avvisati.add(idRapporto);
+    box.innerHTML = `<div class="avviso err">${sospetto}<br><br>
+      Se sono davvero le ultime quattro, premi di nuovo «Registra».</div>`;
+    return;
+  }
   let dal = null;
   if (dalGrezzo) {
     const m = dalGrezzo.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/);
@@ -995,7 +1106,12 @@ const NOME_GENERE = {
   insurance_policy: "Polizza", loan: "Finanziamento",
 };
 
-function box(html) { document.getElementById("modulo-azione").innerHTML = html; }
+function box(html) {
+  const b = document.getElementById("modulo-azione");
+  if (!b) return;
+  b.innerHTML = html;
+  if (html) b.scrollIntoView({ block: "start", behavior: "smooth" });
+}
 const esito = (m, ok = false) =>
   document.getElementById("esito-azione").innerHTML = `<div class="avviso ${ok ? "ok" : "err"}">${esc(m)}</div>`;
 
@@ -1103,6 +1219,161 @@ async function eseguiSeparazione(id) {
     await ricarica();
     setTimeout(disegna, 900);
   } catch (e) { esito(e.message); }
+}
+
+/* ── Unire rapporti che sono lo stesso rapporto ────────────────────────────
+   Il caso tipico e' la carta che scade e viene rifatta: l'emittente cambia il
+   numero, il rapporto resta quello. Tenerli separati spezza in due lo storico
+   e fa comparire dal nulla, sul rapporto nuovo, un debito che era gia' li'.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+const periodoDi = (id) => {
+  const c = dati.copertura.filter((x) => x.relationship_id === id);
+  if (!c.length) return { da: null, a: null };
+  return { da: c.map((x) => x.start_date).sort()[0], a: c.map((x) => x.end_date).sort().at(-1) };
+};
+
+function mostraUnione(id, suggerito = "") {
+  const r = perRapporto(id);
+  const candidati = dati.rapporti
+    .filter((x) => x.id !== id && x.institution_key === r.institution_key && x.confirmation !== "rejected")
+    .map((x) => ({ x, p: periodoDi(x.id), docs: documentiDi(x.id).length }))
+    .sort((a, b) => (a.p.da ?? "9") < (b.p.da ?? "9") ? -1 : 1);
+
+  if (!candidati.length) {
+    box(`<div class="card"><div class="note">Non ci sono altri rapporti di ${esc(r.institution_label)} con cui unirlo.</div></div>`);
+    return;
+  }
+
+  const mio = periodoDi(id);
+
+  box(`
+    <div class="card" style="background:var(--surface-2)">
+      <h3>Unisci «${esc(r.display_name)}» a un altro rapporto</h3>
+      <p>Diventeranno un rapporto solo. I documenti, i periodi e le scadenze si sommano;
+      le carte diventano una successione, ciascuna con il suo periodo di validità.</p>
+
+      <div class="card">
+        <h3>Questo <span class="badge mute">${documentiDi(id).length} documenti</span></h3>
+        <div class="meta">
+          ${mio.da ? `<span>${dataBreve(mio.da)} → ${dataBreve(mio.a)}</span>` : "<span>periodo ignoto</span>"}
+          ${strumentiDi(id).map((s) => `<span><code>${esc(s.masked_pan)}</code></span>`).join("")}
+        </div>
+      </div>
+
+      <p style="color:var(--text);font-size:0.88rem;margin-top:0.8rem"><strong>Da unire con:</strong></p>
+      ${candidati.map(({ x, p, docs }) => `
+        <label class="card" style="display:block;cursor:pointer">
+          <span style="display:flex;gap:0.6rem;align-items:flex-start">
+            <input type="checkbox" class="uni" value="${esc(x.id)}"${x.id === suggerito ? " checked" : ""} style="margin-top:0.3rem">
+            <span style="flex:1">
+              <strong style="font-size:0.93rem">${esc(x.display_name)}</strong>
+              <span class="meta" style="margin-top:0.3rem">
+                <span>${docs} documenti</span>
+                ${p.da ? `<span>${dataBreve(p.da)} → ${dataBreve(p.a)}</span>` : ""}
+                ${strumentiDi(x.id).map((s) => `<span><code>${esc(s.masked_pan)}</code></span>`).join("")}
+              </span>
+            </span>
+          </span>
+        </label>`).join("")}
+
+      <label class="campo" style="margin-top:0.7rem"><span>Nome del rapporto unito</span>
+        <input type="text" id="nome-unito" value="${esc(r.display_name)}"></label>
+
+      <div class="note risk">L'unione non si annulla con un clic: i documenti finiscono tutti sotto un
+      rapporto solo e per tornare indietro bisogna separarli. Unisci solo se sei sicuro che siano
+      la stessa cosa.</div>
+      <div class="actions">
+        <button class="act" data-fai-unione="${esc(id)}">Uniscili</button>
+        <button class="act ghost" data-chiudi-azione="1">Annulla</button>
+      </div>
+      <div id="esito-azione"></div>
+    </div>`);
+}
+
+async function eseguiUnione(id) {
+  const assorbiti = [...document.querySelectorAll("input.uni:checked")].map((c) => c.value);
+  if (!assorbiti.length) { esito("Non hai scelto nessun rapporto da unire."); return; }
+  const nome = (document.getElementById("nome-unito").value || "").trim();
+  if (!nome) { esito("Dai un nome al rapporto unito."); return; }
+
+  try {
+    esito("Unione in corso…", true);
+
+    // PRIMA di muovere qualunque cosa mi segno da quale rapporto viene ogni
+    // carta e che periodo copriva. Dopo l'unione i documenti stanno tutti
+    // sotto un rapporto solo e non sarebbe piu' possibile ricostruirlo.
+    const periodiCarte = new Map();
+    for (const rid of [id, ...assorbiti]) {
+      const p = periodoDi(rid);
+      for (const s of strumentiDi(rid)) periodiCarte.set(s.id, s.valid_from ? { da: s.valid_from, a: s.valid_to } : p);
+    }
+
+    for (const a of assorbiti) {
+      await spostaDocumenti(a, id, documentiDi(a).map((d) => d.id));
+      // Quello che resta legato al rapporto assorbito passa al principale.
+      await modifica("coverage", `relationship_id=eq.${a}`, { relationship_id: id });
+      await modifica("payment_instrument", `relationship_id=eq.${a}`, { relationship_id: id });
+      await modifica("relationship_identifier", `relationship_id=eq.${a}`, { relationship_id: id });
+      await modifica("document_expectation", `relationship_id=eq.${a}`, { relationship_id: id });
+      await modifica("relationship", `id=eq.${a}`,
+        { confirmation: "rejected", status: "closed", closure_evidence: "user_confirmed",
+          updated_at: new Date().toISOString() });
+      await traccia("relationship.merge", "relationship", a,
+        `Unito a ${nome}: era lo stesso rapporto`);
+    }
+
+    // Le carte diventano una successione ordinata nel tempo. I periodi di
+    // validita' vengono dai documenti, non da quello che si immagina: ogni
+    // carta vale dal primo al giorno prima della successiva; l'ultima resta
+    // aperta perche' e' quella in uso.
+    await ricarica();
+    const carte = strumentiDi(id)
+      .map((s) => ({ s, p: periodiCarte.get(s.id) ?? { da: null, a: null } }))
+      .sort((a, b) => (a.p.da ?? "9999") < (b.p.da ?? "9999") ? -1 : 1);
+
+    for (let n = 0; n < carte.length; n++) {
+      const { s, p } = carte[n];
+      const dopo = carte[n + 1];
+      await modifica("payment_instrument", `id=eq.${s.id}`, {
+        valid_from: p.da ?? null,
+        valid_to: dopo ? (dopo.p.da ?? p.a ?? null) : null,
+        replaces_id: n > 0 ? carte[n - 1].s.id : null,
+        succession_status: "user_confirmed",
+        succession_rung: "explicit_document",
+        succession_proof: "Successione confermata dall'intestatario: è sempre stata la stessa carta, rifatta alla scadenza",
+      });
+    }
+
+    await modifica("relationship", `id=eq.${id}`,
+      { display_name: nome, confirmation: "user_confirmed", updated_at: new Date().toISOString() });
+    await traccia("relationship.merge", "relationship", id,
+      `${assorbiti.length} rapporti assorbiti; ${carte.length} carte messe in successione`);
+
+    esito(`Uniti. Ora è un rapporto solo con ${carte.length} carte in successione.`, true);
+    await ricarica();
+    setTimeout(disegna, 1000);
+  } catch (e) { esito(e.message); }
+}
+
+/* ── Togliere una carta inserita per sbaglio ───────────────────────────── */
+
+async function rimuoviCarta(idCarta) {
+  const s = strumento(idCarta);
+  if (!s) return;
+  if (!confirm(`Togliere la carta ${s.masked_pan}?\n\nI documenti restano dove sono: sparisce solo la carta dall'elenco.`)) return;
+  try {
+    // Chi la indicava come propria antenata resta senza antenata, altrimenti
+    // il database rifiuta la cancellazione.
+    for (const altro of dati.strumenti.filter((x) => x.replaces_id === idCarta)) {
+      await modifica("payment_instrument", `id=eq.${altro.id}`, { replaces_id: s.replaces_id ?? null });
+    }
+    await cancella("payment_instrument", `id=eq.${idCarta}`);
+    await traccia("instrument.remove", "payment_instrument", idCarta,
+      `Carta ${s.masked_pan} tolta: inserita per sbaglio`);
+    await ricarica();
+    disegna();
+  } catch (e) { alert(`Non è riuscito: ${e.message}`); }
 }
 
 /* ── Spostare i documenti finiti nel rapporto sbagliato ────────────────── */
@@ -1646,6 +1917,9 @@ function collega(p, arg) {
       await ricarica(); disegna();
     }
     if (d.separa) mostraSeparazione(d.separa);
+    if (d.unisci) mostraUnione(d.unisci, d.con ?? "");
+    if (d.faiUnione) await eseguiUnione(d.faiUnione);
+    if (d.rimuoviCarta) await rimuoviCarta(d.rimuoviCarta);
     if (d.estranei) mostraEstranei(d.estranei);
     if (d.archivia) mostraArchiviazione(d.archivia);
     if (d.tipo) mostraCambioTipo(d.tipo);
