@@ -334,6 +334,13 @@ async function modifica(tabella, filtro, campi) {
   if (!r.ok) throw new Error(`${tabella}: ${await r.text()}`);
 }
 
+async function cancella(tabella, filtro) {
+  const r = await chiama(`/rest/v1/${tabella}?${filtro}`, {
+    method: "DELETE", headers: { prefer: "return=minimal" },
+  });
+  if (!r.ok) throw new Error(`${tabella}: ${await r.text()}`);
+}
+
 async function traccia(azione, genere, soggetto, motivo) {
   // L'audit è append-only: il database rifiuta modifiche e cancellazioni.
   await scrivi("audit_event", [{
@@ -477,61 +484,345 @@ function paginaSituazione() {
   `;
 }
 
-/* ── Rapporti ───────────────────────────────────────────────────────────── */
+/* ── Rapporti: elenco, diagnosi, dettaglio ──────────────────────────────── */
+
+const GENERE = {
+  cash_account: "conto", credit_facility: "carta di credito",
+  securities_dossier: "dossier titoli", payment_instrument: "strumento di pagamento",
+  insurance_policy: "polizza", loan: "finanziamento",
+};
+
+const ETICHETTA_IDENT = {
+  iban: "IBAN", account_number: "numero di conto", contract_number: "numero di contratto",
+  dossier_number: "numero di dossier", card_masked_pan: "carta",
+  issuer_statement_id: "serie di estratto conto",
+};
+
+/* Quali documenti ci si aspetta di trovare sotto un rapporto di ciascun
+   genere. Un documento fuori da questo insieme non prova che il rapporto sia
+   sbagliato, ma e' il segnale che qualcosa e' finito nel posto sbagliato. */
+const TIPI_ATTESI = {
+  cash_account: new Set(["bank_account_statement", "debit_card_movement_list", "transfer_receipt",
+    "summary_document", "service_notice", "contract_change", "tax_receipt", "unknown"]),
+  credit_facility: new Set(["credit_card_statement", "card_settlement_notice", "expense_summary",
+    "debit_card_movement_list", "summary_document", "service_notice", "contract_change", "unknown"]),
+  securities_dossier: new Set(["securities_statement", "securities_order_note", "advisory_report",
+    "summary_document", "service_notice", "contract_change", "tax_receipt", "unknown"]),
+};
+
+/* Documenti che, da soli, non bastano a dimostrare che esista un rapporto.
+   Il documento di sintesi in particolare viene emesso per OGNI prodotto —
+   conto, carta, dossier, fido — quindi trovarne uno non significa aver
+   trovato un conto. */
+const PROVE_DEBOLI = new Set(["summary_document", "service_notice", "contract_change",
+  "transfer_receipt", "tax_receipt", "unknown"]);
+
+const identDi = (id) => dati.identificativi.filter((i) => i.relationship_id === id);
+const documentiDi = (id) => {
+  const ids = new Set(dati.legami.filter((l) => l.relationship_id === id).map((l) => l.document_id));
+  return dati.documenti.filter((d) => ids.has(d.id));
+};
+const fileDi = (idDocumento) => dati.file.find((f) => f.id === idDocumento);
+const nomeFile = (d) => dati.file.find((f) => f.id === d.source_file_id)?.display_name ?? "—";
+const serieDi = (d) => (d.issuer_statement_id ? d.issuer_statement_id.slice(0, 2) : null);
+
+function raggruppa(elenco, chiave) {
+  const m = new Map();
+  for (const x of elenco) {
+    const k = chiave(x);
+    if (!m.has(k)) m.set(k, []);
+    m.get(k).push(x);
+  }
+  return m;
+}
+
+/**
+ * Cosa non torna in questo rapporto.
+ *
+ * Non decide niente: espone le contraddizioni fra quello che il rapporto
+ * dichiara di essere e le prove che ha sotto. La decisione resta all'intestatario.
+ */
+function diagnosi(r) {
+  const avvisi = [];
+  const ident = identDi(r.id);
+  const docs = documentiDi(r.id);
+
+  // Piu' identificativi FORTI dello stesso tipo: quasi sempre due rapporti
+  // distinti tenuti insieme per errore. E' l'errore piu' grave dei due,
+  // perche' somma fra loro conti che non c'entrano niente.
+  for (const [tipo, elenco] of raggruppa(ident.filter((i) => i.strength === "strong"), (i) => i.type)) {
+    if (elenco.length > 1) {
+      avvisi.push({
+        gravita: "stop", genere: "fusione",
+        titolo: `Tiene insieme ${elenco.length} ${ETICHETTA_IDENT[tipo] ?? tipo} diversi`,
+        dettaglio: elenco.map((i) => i.masked).join("  ·  "),
+        spiegazione: "Se sono conti distinti, qui sono stati sommati in uno solo: ogni numero che ne uscirebbe sarebbe la somma di due conti diversi.",
+      });
+    }
+  }
+
+  // Piu' serie di estratto conto sotto lo stesso rapporto: stessa cosa,
+  // vista dal lato dei documenti invece che degli identificativi.
+  const serie = raggruppa(docs.filter((d) => d.document_type === "bank_account_statement" && serieDi(d)),
+    (d) => serieDi(d));
+  if (serie.size > 1) {
+    avvisi.push({
+      gravita: "stop", genere: "serie",
+      titolo: `Gli estratti conto appartengono a ${serie.size} serie diverse`,
+      dettaglio: [...serie.entries()].map(([s, e]) => `serie ${s}: ${e.length} documenti`).join("  ·  "),
+      spiegazione: "Una banca numera gli estratti conto per rapporto. Serie diverse quasi sempre vogliono dire rapporti diversi.",
+    });
+  }
+
+  // Un solo documento, e per giunta di quelli che non provano granche'.
+  if (docs.length === 1 && PROVE_DEBOLI.has(docs[0].document_type)) {
+    avvisi.push({
+      gravita: "warn", genere: "fantasma",
+      titolo: `Poggia su un solo ${TIPI[docs[0].document_type] ?? docs[0].document_type}`,
+      dettaglio: nomeFile(docs[0]),
+      spiegazione: docs[0].document_type === "summary_document"
+        ? "Il documento di sintesi viene emesso per ogni prodotto — conto, carta, dossier — non solo per i conti. Trovarne uno non dimostra che esista un conto a sé."
+        : "Un documento di questo tipo cita un numero di rapporto, ma non basta a dimostrare che sia un rapporto separato.",
+    });
+  }
+
+  // Documenti che non c'entrano con il genere dichiarato.
+  const attesi = TIPI_ATTESI[r.entity_kind];
+  const estranei = attesi ? docs.filter((d) => !attesi.has(d.document_type)) : [];
+  if (estranei.length) {
+    avvisi.push({
+      gravita: "warn", genere: "estranei",
+      titolo: `${estranei.length} document${estranei.length === 1 ? "o" : "i"} di tipo estraneo`,
+      dettaglio: [...new Set(estranei.map((d) => TIPI[d.document_type] ?? d.document_type))].join(", "),
+      spiegazione: `Sotto un ${GENERE[r.entity_kind]} non ci si aspetta questi documenti: appartengono probabilmente a un altro rapporto.`,
+    });
+  }
+
+  return avvisi;
+}
+
+let filtroRap = { istituto: "", genere: "", stato: "", cerca: "" };
 
 function paginaRapporti() {
   if (!dati.rapporti.length) return vuoto("Nessun rapporto. Carica dei documenti per cominciare.");
 
-  return dati.rapporti.map((r) => {
-    const ident = dati.identificativi.filter((i) => i.relationship_id === r.id);
-    const strum = dati.strumenti.filter((s) => s.relationship_id === r.id);
-    const docs = dati.legami.filter((l) => l.relationship_id === r.id).length;
-    const cop = dati.copertura.filter((c) => c.relationship_id === r.id);
-    const inizi = cop.map((c) => c.start_date).sort();
-    const fini = cop.map((c) => c.end_date).sort();
+  const istituti = [...new Set(dati.rapporti.map((r) => r.institution_label || r.institution_key))].sort();
+  const generi = [...new Set(dati.rapporti.map((r) => r.entity_kind))].sort();
 
-    const stato = r.confirmation === "user_confirmed"
-      ? '<span class="badge ok">confermato</span>'
-      : r.disposition === "preselected"
-        ? '<span class="badge warn">proposto, da confermare</span>'
+  const conDiagnosi = dati.rapporti.map((r) => ({
+    r, avvisi: diagnosi(r), docs: documentiDi(r.id).length,
+  }));
+
+  const elenco = conDiagnosi.filter(({ r, avvisi }) =>
+    (!filtroRap.istituto || (r.institution_label || r.institution_key) === filtroRap.istituto) &&
+    (!filtroRap.genere || r.entity_kind === filtroRap.genere) &&
+    (filtroRap.stato !== "confermati" || r.confirmation === "user_confirmed") &&
+    (filtroRap.stato !== "da_confermare" || r.confirmation === "proposed") &&
+    (filtroRap.stato !== "da_rivedere" || avvisi.length > 0) &&
+    (!filtroRap.cerca || `${r.display_name} ${identDi(r.id).map((i) => i.masked).join(" ")}`
+      .toLowerCase().includes(filtroRap.cerca.toLowerCase())));
+
+  elenco.sort((a, b) => b.docs - a.docs || a.r.display_name.localeCompare(b.r.display_name));
+
+  const daRivedere = conDiagnosi.filter((x) => x.avvisi.length).length;
+
+  return `
+    <div class="card">
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.5rem">
+        <select id="f-istituto" style="flex:1;min-width:145px">
+          <option value="">Tutti gli istituti</option>
+          ${istituti.map((i) => `<option value="${esc(i)}"${filtroRap.istituto === i ? " selected" : ""}>${esc(i)}</option>`).join("")}
+        </select>
+        <select id="f-genere" style="flex:1;min-width:145px">
+          <option value="">Tutti i tipi</option>
+          ${generi.map((g) => `<option value="${esc(g)}"${filtroRap.genere === g ? " selected" : ""}>${esc(GENERE[g] ?? g)}</option>`).join("")}
+        </select>
+        <select id="f-stato" style="flex:1;min-width:145px">
+          <option value="">Tutti gli stati</option>
+          <option value="da_rivedere"${filtroRap.stato === "da_rivedere" ? " selected" : ""}>Da rivedere (${daRivedere})</option>
+          <option value="da_confermare"${filtroRap.stato === "da_confermare" ? " selected" : ""}>Da confermare</option>
+          <option value="confermati"${filtroRap.stato === "confermati" ? " selected" : ""}>Confermati</option>
+        </select>
+      </div>
+      <input type="text" id="f-cerca" placeholder="Cerca per nome o per numero…" value="${esc(filtroRap.cerca)}">
+      <div class="meta"><span>${elenco.length} di ${dati.rapporti.length}</span>
+        ${daRivedere ? `<span>${daRivedere} con qualcosa che non torna</span>` : ""}</div>
+    </div>
+
+    ${elenco.length ? elenco.map(({ r, avvisi, docs }) => {
+      const ident = identDi(r.id);
+      const strum = dati.strumenti.filter((s) => s.relationship_id === r.id);
+      const cop = dati.copertura.filter((c) => c.relationship_id === r.id);
+      const inizi = cop.map((c) => c.start_date).sort();
+      const fini = cop.map((c) => c.end_date).sort();
+
+      const stato = r.confirmation === "user_confirmed" ? '<span class="badge ok">confermato</span>'
+        : r.confirmation === "rejected" ? '<span class="badge mute">archiviato</span>'
+        : r.disposition === "preselected" ? '<span class="badge warn">da confermare</span>'
         : '<span class="badge stop">da verificare a mano</span>';
 
-    const chiuso = r.status === "closed" ? '<span class="badge mute">chiuso</span>' : "";
+      const peggiore = avvisi.some((a) => a.gravita === "stop") ? "stop" : avvisi.length ? "warn" : null;
 
-    const GENERE = {
-      cash_account: "conto", credit_facility: "carta di credito",
-      securities_dossier: "dossier titoli", payment_instrument: "strumento",
-      insurance_policy: "polizza", loan: "finanziamento",
-    };
-
-    return `
-      <div class="card">
-        <h3>${esc(r.display_name)} ${stato} ${chiuso}</h3>
-        <p>${esc(r.institution_label || r.institution_key)} · ${esc(GENERE[r.entity_kind] ?? r.entity_kind)}${
-          r.currency ? ` · ${esc(r.currency)}` : ""}</p>
-        <div class="meta">
-          <span>${docs} document${docs === 1 ? "o" : "i"}</span>
-          ${r.cadence ? `<span>cadenza ${esc(r.cadence === "monthly" ? "mensile" : r.cadence === "quarterly" ? "trimestrale" : r.cadence === "yearly" ? "annuale" : r.cadence)}</span>` : ""}
-          ${inizi.length ? `<span>${dataBreve(inizi[0])} → ${dataBreve(fini[fini.length - 1])}</span>` : ""}
-          <span>attendibilità ${(r.confidence * 100).toFixed(0)}%</span>
-        </div>
-        ${ident.length ? `<div class="meta">${ident.map((i) =>
-          `<span><code>${esc(i.masked)}</code> ${esc(i.strength === "strong" ? "forte" : i.strength === "medium" ? "medio" : "debole")}</span>`).join("")}</div>` : ""}
-        ${strum.length ? `<div class="note proof">Carte: ${strum.map((s) => esc(s.masked_pan)).join(" → ")}</div>` : ""}
-        ${r.confirmation === "proposed" ? `
+      return `
+        <div class="card">
+          <h3>${esc(r.display_name)} ${stato}
+            ${r.status === "closed" ? '<span class="badge mute">chiuso</span>' : ""}
+            ${peggiore ? `<span class="badge ${peggiore}">${avvisi.length} da rivedere</span>` : ""}</h3>
+          <p>${esc(r.institution_label || r.institution_key)} · ${esc(GENERE[r.entity_kind] ?? r.entity_kind)}${
+            r.currency ? ` · ${esc(r.currency)}` : ""}</p>
+          <div class="meta">
+            <span>${docs} document${docs === 1 ? "o" : "i"}</span>
+            ${inizi.length ? `<span>${dataBreve(inizi[0])} → ${dataBreve(fini[fini.length - 1])}</span>` : ""}
+            ${r.cadence ? `<span>cadenza ${esc(CADENZA[r.cadence] ?? r.cadence)}</span>` : ""}
+          </div>
+          ${ident.length ? `<div class="meta">${ident.slice(0, 6).map((i) =>
+            `<span><code>${esc(i.masked)}</code></span>`).join("")}${
+            ident.length > 6 ? `<span>e altri ${ident.length - 6}</span>` : ""}</div>` : ""}
+          ${strum.length ? `<div class="note proof">Carte: ${strum.map((s) => esc(s.masked_pan)).join(" → ")}</div>` : ""}
+          ${avvisi.map((a) => `<div class="note ${a.gravita === "stop" ? "stop" : "risk"}"><strong>${esc(a.titolo)}</strong> — ${esc(a.dettaglio)}</div>`).join("")}
           <div class="actions">
-            <button class="act" data-conferma="${esc(r.id)}">Confermo, è mio</button>
-            <button class="act ghost" data-rifiuta="${esc(r.id)}">Non è mio</button>
-          </div>` : ""}
-      </div>`;
-  }).join("") + (dati.sconosciuti.length ? `
-    <h2>Nominati ma senza documenti <span class="sub">${dati.sconosciuti.length}</span></h2>
-    ${dati.sconosciuti.map((s) => `
-      <div class="card">
-        <h3>${esc(s.identifier_mask)} <span class="badge mute">nessun documento</span></h3>
-        <p>${esc(s.institution_key)} · citato in ${s.mentioned_in} documenti di altri rapporti</p>
-        <div class="note">${esc(s.rationale)}</div>
-      </div>`).join("")}` : "");
+            <a class="tile" style="padding:0.45rem 0.85rem;border-color:var(--accent);color:var(--accent);font-weight:600;font-size:0.83rem;display:inline-block"
+               href="#/rapporto/${esc(r.id)}">Apri e verifica</a>
+          </div>
+        </div>`;
+    }).join("") : vuoto("Nessun rapporto con questi filtri.")}
+
+    ${dati.sconosciuti.length && !filtroRap.istituto && !filtroRap.genere && !filtroRap.stato ? `
+      <h2>Nominati ma senza documenti <span class="sub">${dati.sconosciuti.length}</span></h2>
+      ${dati.sconosciuti.map((s) => `
+        <div class="card">
+          <h3>${esc(s.identifier_mask)} <span class="badge mute">nessun documento</span></h3>
+          <p>${esc(s.institution_key)} · citato in ${s.mentioned_in} documenti di altri rapporti</p>
+          <div class="note">${esc(s.rationale)}</div>
+        </div>`).join("")}` : ""}
+  `;
+}
+
+const CADENZA = { monthly: "mensile", quarterly: "trimestrale", yearly: "annuale", irregular: "irregolare" };
+
+/* ── Dettaglio di un rapporto: tutte le prove, e le azioni per rimetterlo a posto ── */
+
+function paginaRapporto(id) {
+  const r = perRapporto(id);
+  if (!r) return vuoto("Rapporto non trovato.");
+
+  const ident = identDi(id);
+  const docs = documentiDi(id);
+  const avvisi = diagnosi(r);
+  const strum = dati.strumenti.filter((s) => s.relationship_id === id);
+  const cop = dati.copertura.filter((c) => c.relationship_id === id);
+  const attese = dati.attese.filter((a) => a.relationship_id === id);
+
+  const perTipo = raggruppa(docs, (d) => d.document_type);
+  const attesi = TIPI_ATTESI[r.entity_kind];
+
+  return `
+    <div class="actions" style="margin-top:0.9rem">
+      <a class="tile" style="padding:0.4rem 0.8rem;font-size:0.83rem;display:inline-block" href="#/rapporti">← Tutti i rapporti</a>
+    </div>
+
+    <h2>${esc(r.display_name)}</h2>
+    <div class="card">
+      <div class="meta">
+        <span>${esc(r.institution_label || r.institution_key)}</span>
+        <span>${esc(GENERE[r.entity_kind] ?? r.entity_kind)}</span>
+        ${r.currency ? `<span>${esc(r.currency)}</span>` : ""}
+        <span>${docs.length} documenti</span>
+        <span>attendibilità ${(r.confidence * 100).toFixed(0)}%</span>
+        <span>${esc(r.origin === "strong_key" ? "riconosciuto da identificativo forte" : r.origin === "medium_key" ? "riconosciuto da identificativo medio" : "inserito a mano")}</span>
+      </div>
+      ${r.confirmation === "proposed" ? `
+        <div class="actions">
+          <button class="act" data-conferma="${esc(r.id)}">Confermo, è mio</button>
+          <button class="act ghost" data-rifiuta="${esc(r.id)}">Non è mio</button>
+        </div>` : `<div class="note proof">Stato: ${esc(
+          r.confirmation === "user_confirmed" ? "confermato da te" : "archiviato")}</div>`}
+    </div>
+
+    ${avvisi.length ? `
+      <h2>Cosa non torna <span class="sub">${avvisi.length}</span></h2>
+      ${avvisi.map((a) => `
+        <div class="card">
+          <h3>${esc(a.titolo)} <span class="badge ${a.gravita}">${esc(a.gravita === "stop" ? "grave" : "da rivedere")}</span></h3>
+          <p>${esc(a.dettaglio)}</p>
+          <div class="note ${a.gravita === "stop" ? "stop" : "risk"}">${esc(a.spiegazione)}</div>
+          ${a.genere === "fusione" || a.genere === "serie" ? `
+            <div class="actions"><button class="act" data-separa="${esc(r.id)}">Separali</button></div>` : ""}
+          ${a.genere === "estranei" ? `
+            <div class="actions"><button class="act" data-estranei="${esc(r.id)}">Sposta i documenti estranei</button></div>` : ""}
+          ${a.genere === "fantasma" ? `
+            <div class="actions">
+              <button class="act ghost" data-archivia="${esc(r.id)}">Non è un rapporto a sé, archivialo</button>
+              <button class="act ghost" data-tipo="${esc(r.id)}">È un altro tipo di rapporto</button>
+            </div>` : ""}
+        </div>`).join("")}
+      <div id="modulo-azione"></div>
+    ` : `<div class="note proof" style="margin-top:1rem">Nessuna contraddizione fra quello che questo rapporto dichiara di essere e i documenti che ha sotto.</div>`}
+
+    <h2>Identificativi <span class="sub">${ident.length}</span></h2>
+    <div class="card"><div class="scorri"><table class="dati">
+      <thead><tr><th>Tipo</th><th>Valore</th><th>Forza</th><th>Stato</th></tr></thead>
+      <tbody>${ident.map((i) => `<tr>
+        <td>${esc(ETICHETTA_IDENT[i.type] ?? i.type)}</td>
+        <td><code>${esc(i.masked)}</code></td>
+        <td>${esc(i.strength === "strong" ? "forte" : i.strength === "medium" ? "medio" : "debole")}</td>
+        <td>${esc(i.status === "verified" ? "verificato" : i.status === "user_confirmed" ? "confermato" : "dedotto")}</td>
+      </tr>`).join("")}</tbody>
+    </table></div></div>
+
+    ${strum.length ? `
+      <h2>Carte <span class="sub">${strum.length}</span></h2>
+      ${strum.map((s) => `<div class="card">
+        <h3><code>${esc(s.masked_pan)}</code> ${s.succession_status === "user_confirmed" ? '<span class="badge ok">sostituzione confermata</span>' : ""}</h3>
+        <div class="meta">
+          ${s.valid_from ? `<span>dal ${dataBreve(s.valid_from)}</span>` : ""}
+          ${s.valid_to ? `<span>al ${dataBreve(s.valid_to)}</span>` : ""}
+          ${s.replaces_id ? `<span>sostituisce <code>${esc(dati.strumenti.find((x) => x.id === s.replaces_id)?.masked_pan ?? "—")}</code></span>` : ""}
+        </div>
+        ${s.succession_proof ? `<div class="note">${esc(s.succession_proof)}</div>` : ""}
+      </div>`).join("")}` : ""}
+
+    <h2>Documenti <span class="sub">${docs.length}</span></h2>
+    ${docs.length ? [...perTipo.entries()]
+      .sort((a, b) => b[1].length - a[1].length)
+      .map(([tipo, elenco]) => {
+        const estraneo = attesi && !attesi.has(tipo);
+        const perSerie = raggruppa(elenco, (d) => serieDi(d) ?? "—");
+        return `
+          <div class="card">
+            <h3>${esc(TIPI[tipo] ?? tipo)} <span class="badge ${estraneo ? "stop" : "mute"}">${elenco.length}</span>
+              ${estraneo ? '<span class="badge stop">non dovrebbe stare qui</span>' : ""}</h3>
+            ${perSerie.size > 1 ? `<div class="meta">${[...perSerie.entries()].map(([s, e]) =>
+              `<span>serie ${esc(s)}: ${e.length}</span>`).join("")}</div>` : ""}
+            <div class="scorri"><table class="dati">
+              <thead><tr><th>File</th><th>Serie</th><th>Data</th><th class="num">Saldo finale</th></tr></thead>
+              <tbody>${elenco.slice(0, 60).map((d) => `<tr>
+                <td>${esc(nomeFile(d))}</td>
+                <td>${esc(d.issuer_statement_id ?? "—")}</td>
+                <td>${dataBreve(d.document_date)}</td>
+                <td class="num">${d.closing_minor !== null && d.closing_minor !== undefined
+                  ? formattaCentesimi(d.closing_minor, d.currency ?? "EUR") : "—"}</td>
+              </tr>`).join("")}</tbody>
+            </table></div>
+            ${elenco.length > 60 ? `<div class="note">Mostrati i primi 60 di ${elenco.length}.</div>` : ""}
+          </div>`;
+      }).join("") : vuoto("Nessun documento collegato.")}
+
+    ${cop.length ? `
+      <h2>Periodi coperti <span class="sub">${cop.length}</span></h2>
+      <div class="card"><div class="meta">${cop.slice(0, 40).map((c) =>
+        `<span>${dataBreve(c.start_date)} → ${dataBreve(c.end_date)}</span>`).join("")}</div></div>` : ""}
+
+    ${attese.length ? `
+      <h2>Scadenze <span class="sub">${attese.length}</span></h2>
+      <div class="card"><div class="meta">
+        ${["overdue", "awaiting", "not_yet_due", "fulfilled", "superseded_by_substitution", "not_expected_closed"]
+          .map((s) => { const n = attese.filter((a) => a.state === s).length; return n
+            ? `<span>${esc({ overdue: "in ritardo", awaiting: "in attesa", not_yet_due: "non ancora dovuti",
+                fulfilled: "arrivati", superseded_by_substitution: "superati da sostituzione",
+                not_expected_closed: "non più attesi" }[s])}: ${n}</span>` : ""; }).join("")}
+      </div></div>` : ""}
+  `;
 }
 
 /* ── Solleciti: il punto in cui si chiede della carta sostitutiva ───────── */
@@ -690,6 +981,261 @@ async function chiudiRapporto(idRapporto) {
   await traccia("relationship.close", "relationship", idRapporto, "Chiusura dichiarata dall'intestatario");
   await ricarica();
   disegna();
+}
+
+/* ── Le riparazioni ─────────────────────────────────────────────────────────
+   Ogni azione qui sposta prove da un rapporto a un altro. Nessuna cancella
+   niente: i documenti restano, cambiano solo di appartenenza, e ogni
+   spostamento lascia una traccia in audit.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+const NOME_GENERE = {
+  cash_account: "Conto", credit_facility: "Carta di credito",
+  securities_dossier: "Dossier titoli", payment_instrument: "Strumento",
+  insurance_policy: "Polizza", loan: "Finanziamento",
+};
+
+function box(html) { document.getElementById("modulo-azione").innerHTML = html; }
+const esito = (m, ok = false) =>
+  document.getElementById("esito-azione").innerHTML = `<div class="avviso ${ok ? "ok" : "err"}">${esc(m)}</div>`;
+
+/** Sposta documenti, e la copertura che ne deriva, da un rapporto a un altro. */
+async function spostaDocumenti(daId, aId, idsDocumenti) {
+  for (const idDoc of idsDocumenti) {
+    await cancella("document_relationship", `relationship_id=eq.${daId}&document_id=eq.${idDoc}`);
+    await scrivi("document_relationship", [{
+      owner: sessione.utente.id, document_id: idDoc, relationship_id: aId,
+      confidence: 1, status: "user_confirmed",
+    }], { fondi: true, conflitto: "owner,document_id,relationship_id" });
+    await modifica("coverage", `document_id=eq.${idDoc}&relationship_id=eq.${daId}`,
+      { relationship_id: aId });
+  }
+}
+
+/* ── Separare un rapporto che ne contiene due ──────────────────────────── */
+
+function mostraSeparazione(id) {
+  const r = perRapporto(id);
+  const docs = documentiDi(id);
+  const forti = identDi(id).filter((i) => i.strength === "strong");
+
+  const perSerie = raggruppa(
+    docs.filter((d) => d.document_type === "bank_account_statement" && serieDi(d)), (d) => serieDi(d));
+  const gruppi = [...perSerie.entries()].sort((a, b) => b[1].length - a[1].length);
+
+  if (gruppi.length < 2) {
+    box(`<div class="card"><div class="note stop">Qui gli identificativi sono più d'uno ma i documenti
+      non portano una serie che permetta di dividerli con certezza. Separarli alla cieca
+      sposterebbe documenti a caso: meglio non farlo.</div></div>`);
+    return;
+  }
+
+  const senzaSerie = docs.length - gruppi.reduce((s, [, e]) => s + e.length, 0);
+
+  box(`
+    <div class="card" style="background:var(--surface-2)">
+      <h3>Separa «${esc(r.display_name)}»</h3>
+      <p>Ci sono ${gruppi.length} serie di estratto conto. Il primo gruppo resta in questo rapporto,
+      gli altri diventano rapporti separati. Dimmi quale numero appartiene a quale serie.</p>
+
+      ${gruppi.map(([serie, elenco], n) => `
+        <div class="card">
+          <h3>Serie ${esc(serie)} <span class="badge mute">${elenco.length} estratti</span>
+            ${n === 0 ? '<span class="badge ok">resta qui</span>' : '<span class="badge warn">diventa un rapporto nuovo</span>'}</h3>
+          <div class="meta">${elenco.slice(0, 4).map((d) => `<span>${esc(nomeFile(d))}</span>`).join("")}${
+            elenco.length > 4 ? `<span>e altri ${elenco.length - 4}</span>` : ""}</div>
+          <label class="campo" style="margin-top:0.5rem"><span>Quale numero è questo?</span>
+            <select id="sep-${esc(serie)}">
+              <option value="">— non lo so —</option>
+              ${forti.map((i) => `<option value="${esc(i.id)}">${esc(ETICHETTA_IDENT[i.type] ?? i.type)} ${esc(i.masked)}</option>`).join("")}
+            </select></label>
+        </div>`).join("")}
+
+      ${senzaSerie ? `<div class="note risk">${senzaSerie} document${senzaSerie === 1 ? "o" : "i"} non
+        hanno una serie e restano dove sono. Li puoi spostare a mano dopo.</div>` : ""}
+      <div class="note">Se non sai a quale numero corrisponde una serie, lascia «non lo so»: la separazione
+      avviene lo stesso e assegni i numeri più tardi. Meglio due rapporti giusti senza etichetta che uno
+      solo che somma conti diversi.</div>
+
+      <div class="actions">
+        <button class="act" data-fai-separazione="${esc(id)}">Separa</button>
+        <button class="act ghost" data-chiudi-azione="1">Annulla</button>
+      </div>
+      <div id="esito-azione"></div>
+    </div>`);
+}
+
+async function eseguiSeparazione(id) {
+  const r = perRapporto(id);
+  const docs = documentiDi(id);
+  const perSerie = raggruppa(
+    docs.filter((d) => d.document_type === "bank_account_statement" && serieDi(d)), (d) => serieDi(d));
+  const gruppi = [...perSerie.entries()].sort((a, b) => b[1].length - a[1].length);
+
+  const scelte = gruppi.map(([serie]) => document.getElementById(`sep-${serie}`)?.value || "");
+  if (new Set(scelte.filter(Boolean)).size !== scelte.filter(Boolean).length) {
+    esito("Hai assegnato lo stesso numero a due serie diverse."); return;
+  }
+
+  try {
+    esito("Separazione in corso…", true);
+    for (let n = 1; n < gruppi.length; n++) {
+      const [serie, elenco] = gruppi[n];
+      const nuovoId = crypto.randomUUID();
+      await scrivi("relationship", [{
+        id: nuovoId, owner: sessione.utente.id,
+        institution_key: r.institution_key, institution_label: r.institution_label,
+        entity_kind: r.entity_kind,
+        display_name: `${NOME_GENERE[r.entity_kind]} ${r.institution_label} — serie ${serie}`,
+        currency: r.currency, status: "open", confirmation: "proposed",
+        origin: "manual", confidence: 0.99, disposition: "needs_confirmation",
+        cadence: r.cadence, cadence_status: r.cadence_status,
+      }], { fondi: false });
+
+      await spostaDocumenti(id, nuovoId, elenco.map((d) => d.id));
+      if (scelte[n]) await modifica("relationship_identifier", `id=eq.${scelte[n]}`, { relationship_id: nuovoId });
+      await traccia("relationship.split", "relationship", id,
+        `Serie ${serie} separata in un rapporto proprio (${elenco.length} documenti)`);
+    }
+    if (scelte[0]) await modifica("relationship_identifier", `id=eq.${scelte[0]}`, { relationship_id: id });
+
+    esito(`Separati. Ora sono ${gruppi.length} rapporti distinti.`, true);
+    await ricarica();
+    setTimeout(disegna, 900);
+  } catch (e) { esito(e.message); }
+}
+
+/* ── Spostare i documenti finiti nel rapporto sbagliato ────────────────── */
+
+function mostraEstranei(id) {
+  const r = perRapporto(id);
+  const attesi = TIPI_ATTESI[r.entity_kind];
+  const estranei = documentiDi(id).filter((d) => attesi && !attesi.has(d.document_type));
+  const altri = dati.rapporti.filter((x) => x.id !== id && x.institution_key === r.institution_key);
+
+  box(`
+    <div class="card" style="background:var(--surface-2)">
+      <h3>Documenti che non appartengono a questo rapporto</h3>
+      <div class="scorri"><table class="dati">
+        <thead><tr><th></th><th>File</th><th>Tipo</th><th>Data</th></tr></thead>
+        <tbody>${estranei.map((d) => `<tr>
+          <td><input type="checkbox" class="est" value="${esc(d.id)}" checked></td>
+          <td>${esc(nomeFile(d))}</td>
+          <td>${esc(TIPI[d.document_type] ?? d.document_type)}</td>
+          <td>${dataBreve(d.document_date)}</td>
+        </tr>`).join("")}</tbody>
+      </table></div>
+      <label class="campo" style="margin-top:0.7rem"><span>Spostali su</span>
+        <select id="destinazione">
+          <option value="">— scegli il rapporto —</option>
+          ${altri.map((x) => `<option value="${esc(x.id)}">${esc(x.display_name)} (${esc(GENERE[x.entity_kind])})</option>`).join("")}
+        </select></label>
+      <div class="note">I documenti non vengono cancellati: cambiano solo rapporto, e resta traccia dello spostamento.</div>
+      <div class="actions">
+        <button class="act" data-fai-spostamento="${esc(id)}">Sposta</button>
+        <button class="act ghost" data-chiudi-azione="1">Annulla</button>
+      </div>
+      <div id="esito-azione"></div>
+    </div>`);
+}
+
+async function eseguiSpostamento(id) {
+  const a = document.getElementById("destinazione").value;
+  if (!a) { esito("Scegli il rapporto di destinazione."); return; }
+  const scelti = [...document.querySelectorAll("input.est:checked")].map((c) => c.value);
+  if (!scelti.length) { esito("Non hai selezionato nessun documento."); return; }
+  try {
+    esito("Spostamento in corso…", true);
+    await spostaDocumenti(id, a, scelti);
+    await traccia("document.reassign", "relationship", id,
+      `${scelti.length} documenti spostati su ${perRapporto(a)?.display_name ?? a}`);
+    esito(`${scelti.length} document${scelti.length === 1 ? "o spostato" : "i spostati"}.`, true);
+    await ricarica();
+    setTimeout(disegna, 900);
+  } catch (e) { esito(e.message); }
+}
+
+/* ── Archiviare un rapporto che non è un rapporto ──────────────────────── */
+
+function mostraArchiviazione(id) {
+  const r = perRapporto(id);
+  const docs = documentiDi(id);
+  const altri = dati.rapporti.filter((x) => x.id !== id && x.institution_key === r.institution_key);
+  box(`
+    <div class="card" style="background:var(--surface-2)">
+      <h3>Archivia «${esc(r.display_name)}»</h3>
+      <p>Sparisce dagli elenchi e dai solleciti. Resta in banca dati e si può riaprire.</p>
+      ${docs.length ? `
+        <label class="campo"><span>I suoi ${docs.length} document${docs.length === 1 ? "o" : "i"} dove vanno?</span>
+          <select id="destinazione">
+            <option value="">Restano qui, archiviati con lui</option>
+            ${altri.map((x) => `<option value="${esc(x.id)}">${esc(x.display_name)} (${esc(GENERE[x.entity_kind])})</option>`).join("")}
+          </select></label>
+        <div class="note risk">Se questo rapporto è nato per sbaglio da un documento che appartiene
+        a un altro rapporto, spostalo lì: altrimenti quel documento sparisce dalla vista.</div>` : ""}
+      <div class="actions">
+        <button class="act pericolo" data-fai-archiviazione="${esc(id)}">Archivia</button>
+        <button class="act ghost" data-chiudi-azione="1">Annulla</button>
+      </div>
+      <div id="esito-azione"></div>
+    </div>`);
+}
+
+async function eseguiArchiviazione(id) {
+  const a = document.getElementById("destinazione")?.value || "";
+  try {
+    esito("In corso…", true);
+    if (a) await spostaDocumenti(id, a, documentiDi(id).map((d) => d.id));
+    await modifica("relationship", `id=eq.${id}`,
+      { confirmation: "rejected", updated_at: new Date().toISOString() });
+    await modifica("document_expectation", `relationship_id=eq.${id}&state=in.(overdue,awaiting,not_yet_due)`,
+      { state: "not_expected_no_activity", rationale: "Rapporto archiviato: non era un rapporto a sé" });
+    await traccia("relationship.archive", "relationship", id,
+      a ? `Archiviato, documenti spostati su ${perRapporto(a)?.display_name ?? a}` : "Archiviato");
+    esito("Archiviato.", true);
+    await ricarica();
+    setTimeout(() => { location.hash = "#/rapporti"; disegna(); }, 900);
+  } catch (e) { esito(e.message); }
+}
+
+/* ── Correggere il tipo di rapporto ────────────────────────────────────── */
+
+function mostraCambioTipo(id) {
+  const r = perRapporto(id);
+  box(`
+    <div class="card" style="background:var(--surface-2)">
+      <h3>Che cos'è davvero «${esc(r.display_name)}»?</h3>
+      <label class="campo"><span>Tipo di rapporto</span>
+        <select id="nuovo-genere">
+          ${Object.entries(GENERE).filter(([k]) => k !== "payment_instrument").map(([k, v]) =>
+            `<option value="${esc(k)}"${k === r.entity_kind ? " selected" : ""}>${esc(v)}</option>`).join("")}
+        </select></label>
+      <div class="note">Cambiare il tipo cambia anche quali documenti ci si aspetta di trovarci sotto,
+      quindi la diagnosi si aggiorna da sola.</div>
+      <div class="actions">
+        <button class="act" data-fai-tipo="${esc(id)}">Cambia</button>
+        <button class="act ghost" data-chiudi-azione="1">Annulla</button>
+      </div>
+      <div id="esito-azione"></div>
+    </div>`);
+}
+
+async function eseguiCambioTipo(id) {
+  const r = perRapporto(id);
+  const g = document.getElementById("nuovo-genere").value;
+  if (g === r.entity_kind) { esito("È già di questo tipo."); return; }
+  try {
+    const coda = r.display_name.includes("—") ? r.display_name.slice(r.display_name.indexOf("—")) : "";
+    await modifica("relationship", `id=eq.${id}`, {
+      entity_kind: g,
+      display_name: `${NOME_GENERE[g]} ${r.institution_label}${coda ? " " + coda : ""}`.trim(),
+      updated_at: new Date().toISOString(),
+    });
+    await traccia("relationship.retype", "relationship", id, `Tipo corretto in ${GENERE[g]}`);
+    esito("Cambiato.", true);
+    await ricarica();
+    setTimeout(disegna, 800);
+  } catch (e) { esito(e.message); }
 }
 
 /* ── Documenti ──────────────────────────────────────────────────────────── */
@@ -1002,22 +1548,43 @@ async function esci() {
    INTERFACCIA
    ═══════════════════════════════════════════════════════════════════════════ */
 
-const pagina = () => (location.hash.replace(/^#\/?/, "") || "");
+const percorso = () => location.hash.replace(/^#\/?/, "").split("/");
+const pagina = () => percorso()[0] || "";
 
 function disegna() {
-  const p = pagina();
-  disegnaTabs(p);
+  const [p, arg] = percorso();
+  // La scheda di dettaglio resta sotto la linguetta «Rapporti».
+  disegnaTabs(p === "rapporto" ? "rapporti" : (p || ""));
   const main = document.getElementById("pagina");
   const corpi = {
     "": paginaSituazione, rapporti: paginaRapporti, solleciti: paginaSolleciti,
     documenti: paginaDocumenti, carica: paginaCarica, impostazioni: paginaImpostazioni,
   };
-  main.innerHTML = (corpi[p] ?? paginaSituazione)();
+  main.innerHTML = p === "rapporto" ? paginaRapporto(arg) : (corpi[p] ?? paginaSituazione)();
   window.scrollTo(0, 0);
-  collega(p);
+  collega(p, arg);
 }
 
-function collega(p) {
+function collega(p, arg) {
+  if (p === "rapporti") {
+    const aggiorna = (campo) => (e) => { filtroRap[campo] = e.target.value; disegna(); };
+    document.getElementById("f-istituto").onchange = aggiorna("istituto");
+    document.getElementById("f-genere").onchange = aggiorna("genere");
+    document.getElementById("f-stato").onchange = aggiorna("stato");
+    const cerca = document.getElementById("f-cerca");
+    let attesa;
+    cerca.oninput = (e) => {
+      clearTimeout(attesa);
+      const v = e.target.value;
+      attesa = setTimeout(() => {
+        filtroRap.cerca = v;
+        disegna();
+        const c = document.getElementById("f-cerca");
+        c.focus(); c.setSelectionRange(v.length, v.length);
+      }, 350);
+    };
+  }
+
   if (p === "carica") {
     const zona = document.getElementById("zona");
     const input = document.getElementById("input-file");
@@ -1078,6 +1645,16 @@ function collega(p) {
       await traccia("relationship.reject", "relationship", d.rifiuta, "Non riconosciuto dall'intestatario");
       await ricarica(); disegna();
     }
+    if (d.separa) mostraSeparazione(d.separa);
+    if (d.estranei) mostraEstranei(d.estranei);
+    if (d.archivia) mostraArchiviazione(d.archivia);
+    if (d.tipo) mostraCambioTipo(d.tipo);
+    if (d.chiudiAzione) box("");
+    if (d.faiSeparazione) await eseguiSeparazione(d.faiSeparazione);
+    if (d.faiSpostamento) await eseguiSpostamento(d.faiSpostamento);
+    if (d.faiArchiviazione) await eseguiArchiviazione(d.faiArchiviazione);
+    if (d.faiTipo) await eseguiCambioTipo(d.faiTipo);
+
     if (d.sostituita) document.getElementById(`modulo-${d.sostituita}`).innerHTML = moduloSostituzione(d.sostituita);
     if (d.annulla) document.getElementById(`modulo-${d.annulla}`).innerHTML = "";
     if (d.salvaSostituzione) await registraSostituzione(d.salvaSostituzione);
