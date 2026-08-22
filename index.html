@@ -807,8 +807,12 @@ async function caricaFile(elenco) {
     file_count: files.length, note: `Caricamento dall'app, ${files.length} file`,
   }], { fondi: false });
 
-  const noti = new Set(dati.file.map((f) => f.content_hash));
-  let caricati = 0, saltati = 0, falliti = [];
+  // Indice per contenuto, non per nome. Un documento gia' conosciuto
+  // dall'analisi esiste in banca dati ma senza i byte: in quel caso il
+  // caricamento non va saltato, va AGGANCIATO alla riga che c'e' gia'.
+  // Saltare, come faceva prima, lasciava il documento senza il suo file.
+  const noti = new Map(dati.file.map((f) => [f.content_hash, f]));
+  let caricati = 0, agganciati = 0, saltati = 0, falliti = [];
 
   for (let i = 0; i < files.length; i++) {
     const f = files[i];
@@ -816,8 +820,8 @@ async function caricaFile(elenco) {
     barra.style.width = `${((i) / files.length) * 100}%`;
     try {
       const hash = await impronta(f);
-      if (noti.has(hash)) { saltati++; continue; }
-      noti.add(hash);
+      const gia = noti.get(hash);
+      if (gia?.storage_path) { saltati++; continue; }
 
       const nome = f.name.replace(/[^\p{L}\p{N}._ -]/gu, "_");
       const percorso = `${sessione.utente.id}/${idLotto}/${hash.slice(0, 12)}-${nome}`;
@@ -829,14 +833,23 @@ async function caricaFile(elenco) {
       });
       if (!r.ok) throw new Error((await r.text()).slice(0, 200));
 
-      await scrivi("source_file", [{
-        id: crypto.randomUUID(), owner: sessione.utente.id, batch_id: idLotto,
-        display_name: f.name, byte_length: f.size, content_hash: hash,
-        normalized_hash: null, page_count: 0, storage_path: percorso, state: "queued",
-      }], { fondi: false });
+      if (gia) {
+        await modifica("source_file", `id=eq.${gia.id}`,
+          { storage_path: percorso, byte_length: f.size });
+        gia.storage_path = percorso;
+        agganciati++;
+      } else {
+        const id = crypto.randomUUID();
+        await scrivi("source_file", [{
+          id, owner: sessione.utente.id, batch_id: idLotto,
+          display_name: f.name, byte_length: f.size, content_hash: hash,
+          normalized_hash: null, page_count: 0, storage_path: percorso, state: "queued",
+        }], { fondi: false });
+        noti.set(hash, { id, content_hash: hash, storage_path: percorso });
+        caricati++;
+      }
 
       if (cartellaLocale) await scriviInCartella(f);
-      caricati++;
     } catch (e) {
       falliti.push(`${f.name}: ${e.message}`);
     }
@@ -847,13 +860,18 @@ async function caricaFile(elenco) {
     id: idLotto, owner: sessione.utente.id,
     state: falliti.length ? "completed_with_warnings" : "completed",
     finished_at: new Date().toISOString(), file_count: files.length,
-    note: `${caricati} caricati, ${saltati} già presenti, ${falliti.length} non riusciti`,
+    note: `${caricati} nuovi, ${agganciati} agganciati, ${saltati} già completi, ${falliti.length} non riusciti`,
   }]);
-  await traccia("batch.upload", "import_batch", idLotto, `${caricati} file caricati`);
+  await traccia("batch.upload", "import_batch", idLotto,
+    `${caricati} nuovi, ${agganciati} agganciati a documenti già noti`);
+
+  const pezzi = [];
+  if (caricati) pezzi.push(`${caricati} nuov${caricati === 1 ? "o" : "i"}`);
+  if (agganciati) pezzi.push(`${agganciati} agganciat${agganciati === 1 ? "o" : "i"} a documenti già noti`);
+  if (saltati) pezzi.push(`${saltati} già in archivio`);
 
   box.innerHTML = `
-    <div class="avviso ok">${caricati} file caricat${caricati === 1 ? "o" : "i"}${
-      saltati ? `, ${saltati} già present${saltati === 1 ? "e" : "i"} e quindi ignorat${saltati === 1 ? "o" : "i"}` : ""}.</div>
+    <div class="avviso ok">${pezzi.length ? pezzi.join(", ") : "niente da fare"}.</div>
     ${falliti.length ? `<div class="avviso err">${falliti.length} non riuscit${falliti.length === 1 ? "o" : "i"}:<br>${
       falliti.slice(0, 5).map(esc).join("<br>")}</div>` : ""}
     <div class="card"><div class="note risk">I file sono in archivio ma non ancora letti: l'estrazione dei
@@ -1118,10 +1136,17 @@ document.getElementById("aggiorna").onclick = async () => {
 window.addEventListener("hashchange", () => { if (sessione) disegna(); });
 
 caricaSessione();
-if (sessione) {
-  rinnova().then(mostraApp).catch(mostraAccesso);
-} else {
+if (!sessione) {
   mostraAccesso();
+} else if (Date.now() < sessione.scade - 60000) {
+  // Il gettone e' ancora buono: non lo si rinnova.
+  // Ogni rinnovo consuma quello di ricambio e ne emette uno nuovo; due
+  // rinnovi ravvicinati — due schede, un ricaricamento durante il primo —
+  // presentano un ricambio gia' speso e la sessione salta. Rinnovare a ogni
+  // apertura era proprio il modo di far cadere una sessione valida.
+  mostraApp();
+} else {
+  rinnova().then(mostraApp).catch(mostraAccesso);
 }
 
 if ("serviceWorker" in navigator) {
