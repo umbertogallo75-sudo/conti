@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Conti personali">
+  <rect width="512" height="512" rx="112" fill="#0b0d10"/>
+  <g fill="none" stroke="#4ea1ff" stroke-width="26" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M120 176h272"/>
+    <path d="M120 256h272"/>
+    <path d="M120 336h176"/>
+  </g>
+  <circle cx="352" cy="336" r="46" fill="none" stroke="#4ec97f" stroke-width="26"/>
+  <path d="M332 336l14 15 28-31" fill="none" stroke="#4ec97f" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -1,0 +1,1130 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0d10" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f7f8fa" media="(prefers-color-scheme: light)">
+<meta name="color-scheme" content="light dark">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Conti">
+<meta name="robots" content="noindex, nofollow">
+<title>Conti personali</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./icona.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="./icona-180.png">
+
+<style>
+/* Nessuna informazione affidata al solo colore: ogni stato ha un'etichetta. */
+:root {
+  --bg:#f7f8fa; --surface:#fff; --surface-2:#f0f2f5; --border:#d8dce3;
+  --text:#14171c; --muted:#5a616e; --accent:#0b5ed7;
+  --ok:#0f7a3d; --warn:#8a5a00; --stop:#a3222a; --radius:12px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:#0b0d10; --surface:#14181d; --surface-2:#1b2027; --border:#2a313a;
+    --text:#e8ecf1; --muted:#9aa4b2; --accent:#4ea1ff;
+    --ok:#4ec97f; --warn:#e0b155; --stop:#ff8a8a;
+  }
+}
+* { box-sizing:border-box; }
+html,body {
+  margin:0; padding:0; background:var(--bg); color:var(--text);
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  font-size:16px; line-height:1.55; -webkit-font-smoothing:antialiased;
+  -webkit-text-size-adjust:100%;
+}
+a { color:var(--accent); }
+.wrap { max-width:860px; margin:0 auto; padding:0 1rem 5rem; }
+
+header.top {
+  position:sticky; top:0; z-index:10; background:var(--bg);
+  border-bottom:1px solid var(--border); padding:calc(0.9rem + env(safe-area-inset-top)) 1rem 0.6rem;
+}
+header.top .riga { display:flex; align-items:baseline; gap:0.6rem; }
+header.top h1 { margin:0; font-size:1.05rem; letter-spacing:-0.01em; flex:1; }
+header.top p { margin:0.15rem 0 0; color:var(--muted); font-size:0.82rem; }
+nav.tabs { display:flex; gap:0.35rem; overflow-x:auto; margin-top:0.7rem; padding-bottom:0.1rem; }
+nav.tabs a {
+  flex:0 0 auto; text-decoration:none; color:var(--text); padding:0.42rem 0.75rem;
+  border-radius:999px; border:1px solid var(--border); background:var(--surface);
+  font-size:0.86rem; white-space:nowrap;
+}
+nav.tabs a[aria-current="page"] { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
+nav.tabs a .n {
+  display:inline-block; margin-left:0.4rem; padding:0 0.36rem; border-radius:999px;
+  background:var(--surface-2); color:var(--muted); font-size:0.76rem; font-variant-numeric:tabular-nums;
+}
+nav.tabs a[aria-current="page"] .n { background:rgba(255,255,255,0.22); color:#fff; }
+
+h2 { font-size:1rem; margin:1.6rem 0 0.6rem; letter-spacing:-0.01em; }
+h2 .sub { font-weight:400; color:var(--muted); font-size:0.84rem; margin-left:0.4rem; }
+.card {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--radius); padding:0.85rem 0.95rem; margin-bottom:0.6rem;
+}
+.card h3 { margin:0 0 0.15rem; font-size:0.95rem; display:flex; gap:0.5rem; align-items:baseline; flex-wrap:wrap; }
+.card p { margin:0.3rem 0 0; color:var(--muted); font-size:0.86rem; }
+.card .meta {
+  margin-top:0.5rem; font-size:0.79rem; color:var(--muted);
+  display:flex; flex-wrap:wrap; gap:0.15rem 0.8rem; font-variant-numeric:tabular-nums;
+}
+.card code { font-size:0.79rem; background:var(--surface-2); padding:0.05rem 0.3rem; border-radius:5px; }
+
+.badge {
+  display:inline-block; font-size:0.72rem; font-weight:600; padding:0.12rem 0.5rem;
+  border-radius:999px; border:1px solid; letter-spacing:0.01em; white-space:nowrap;
+}
+.badge.ok{color:var(--ok);border-color:var(--ok)} .badge.warn{color:var(--warn);border-color:var(--warn)}
+.badge.stop{color:var(--stop);border-color:var(--stop)} .badge.mute{color:var(--muted);border-color:var(--border)}
+
+.tiles { display:grid; grid-template-columns:repeat(2,1fr); gap:0.55rem; margin-top:0.9rem; }
+@media (min-width:620px){ .tiles{grid-template-columns:repeat(4,1fr)} }
+.tile {
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+  padding:0.7rem 0.8rem; text-decoration:none; color:inherit; display:block;
+}
+.tile .v { font-size:1.5rem; font-weight:650; font-variant-numeric:tabular-nums; letter-spacing:-0.02em; }
+.tile .k { font-size:0.78rem; color:var(--muted); }
+
+.empty {
+  border:1px dashed var(--border); border-radius:var(--radius);
+  padding:1.4rem 1rem; text-align:center; color:var(--muted); font-size:0.88rem;
+}
+button.act {
+  font:inherit; font-size:0.83rem; font-weight:600; cursor:pointer; padding:0.45rem 0.85rem;
+  border-radius:8px; border:1px solid var(--accent); background:var(--accent); color:#fff;
+}
+button.act.ghost { background:transparent; color:var(--text); border-color:var(--border); }
+button.act.pericolo { background:transparent; color:var(--stop); border-color:var(--stop); }
+button.act[disabled] { opacity:0.5; cursor:default; }
+button.act:focus-visible, nav.tabs a:focus-visible, .tile:focus-visible, input:focus-visible {
+  outline:3px solid var(--accent); outline-offset:2px;
+}
+.actions { display:flex; gap:0.5rem; margin-top:0.7rem; flex-wrap:wrap; }
+.note { border-left:3px solid var(--border); padding:0.15rem 0 0.15rem 0.7rem; margin-top:0.55rem; color:var(--muted); font-size:0.83rem; }
+.note.proof{border-left-color:var(--ok)} .note.risk{border-left-color:var(--warn)} .note.stop{border-left-color:var(--stop)}
+
+input[type=email],input[type=password],input[type=text],select {
+  font:inherit; width:100%; padding:0.6rem 0.7rem; border-radius:8px;
+  border:1px solid var(--border); background:var(--surface); color:var(--text);
+}
+label.campo { display:block; margin-bottom:0.7rem; font-size:0.84rem; color:var(--muted); }
+label.campo span { display:block; margin-bottom:0.2rem; }
+
+#zona {
+  border:2px dashed var(--border); border-radius:var(--radius); padding:2rem 1rem;
+  text-align:center; color:var(--muted); background:var(--surface);
+}
+#zona.sopra { border-color:var(--accent); color:var(--text); background:var(--surface-2); }
+
+.avviso { padding:0.6rem 0.8rem; border-radius:8px; border:1px solid; font-size:0.86rem; margin-bottom:0.7rem; }
+.avviso.err { color:var(--stop); border-color:var(--stop); }
+.avviso.ok  { color:var(--ok);  border-color:var(--ok); }
+
+.riga-progresso { height:4px; background:var(--surface-2); border-radius:99px; overflow:hidden; margin-top:0.5rem; }
+.riga-progresso i { display:block; height:100%; background:var(--accent); width:0; transition:width 0.2s; }
+
+#accesso { max-width:340px; margin:14vh auto 0; padding:0 1.2rem; }
+#accesso h1 { font-size:1.2rem; margin:0 0 0.2rem; }
+#accesso p.sotto { color:var(--muted); font-size:0.86rem; margin:0 0 1.4rem; }
+
+table.dati { width:100%; border-collapse:collapse; font-size:0.84rem; font-variant-numeric:tabular-nums; }
+table.dati th { text-align:left; color:var(--muted); font-weight:600; padding:0.3rem 0.5rem 0.3rem 0; }
+table.dati td { padding:0.3rem 0.5rem 0.3rem 0; border-top:1px solid var(--border); }
+table.dati td.num { text-align:right; }
+.scorri { overflow-x:auto; }
+
+@media (prefers-reduced-motion:reduce){ *{animation:none!important;transition:none!important} }
+</style>
+
+<div id="accesso" hidden>
+  <h1>Conti personali</h1>
+  <p class="sotto">L'accesso è personale. Nessun dato è visibile senza credenziali.</p>
+  <div id="accesso-avviso"></div>
+  <form id="modulo-accesso">
+    <label class="campo"><span>Indirizzo di posta</span>
+      <input type="email" id="email" autocomplete="username" required inputmode="email"></label>
+    <label class="campo"><span>Parola d'accesso</span>
+      <input type="password" id="password" autocomplete="current-password" required></label>
+    <button class="act" type="submit" id="pulsante-accesso" style="width:100%">Entra</button>
+  </form>
+</div>
+
+<div id="app" hidden>
+  <header class="top">
+    <div class="riga">
+      <h1>Conti personali</h1>
+      <button class="act ghost" id="aggiorna" title="Rileggi i dati">Aggiorna</button>
+    </div>
+    <p id="sottotitolo">—</p>
+    <nav class="tabs" id="tabs"></nav>
+  </header>
+  <main class="wrap" id="pagina"></main>
+</div>
+
+<script type="module">
+"use strict";
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CONFIGURAZIONE
+   La chiave `anon` è pubblica per costruzione: non è un segreto e non protegge
+   nulla. La protezione reale è la row-level security sul database, che lega
+   ogni riga all'utenza che ha effettuato l'accesso.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const BASE = "https://dvkkxqfcxeebqlmtryxi.supabase.co";
+const ANON = "sb_publishable_PIvO1WmssAHUXXwy6nmz_w_W_tPxtNG";
+const BUCKET = "documenti";
+const CHIAVE_SESSIONE = "conti.sessione";
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   IMPORTI — mai virgola mobile, mai Intl.NumberFormat
+   Intl con it-IT non raggruppa i numeri di quattro cifre: 1234,56 invece di
+   1.234,56. Il raggruppamento è fatto a mano. Gli importi arrivano in centesimi
+   e restano interi fino alla stampa.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+function formattaCentesimi(centesimi, valuta = "EUR") {
+  if (centesimi === null || centesimi === undefined) return "—";
+  const n = BigInt(centesimi);
+  const negativo = n < 0n;
+  const assoluto = negativo ? -n : n;
+  const intero = (assoluto / 100n).toString();
+  const decimali = (assoluto % 100n).toString().padStart(2, "0");
+  let gruppi = "";
+  for (let i = 0; i < intero.length; i++) {
+    if (i > 0 && (intero.length - i) % 3 === 0) gruppi += ".";
+    gruppi += intero[i];
+  }
+  const simbolo = { EUR: "€", USD: "$", GBP: "£", CNY: "¥" }[valuta] ?? valuta;
+  return `${negativo ? "−" : ""}${gruppi},${decimali} ${simbolo}`;
+}
+
+const MESI = ["gennaio","febbraio","marzo","aprile","maggio","giugno",
+              "luglio","agosto","settembre","ottobre","novembre","dicembre"];
+
+function dataBreve(iso) {
+  if (!iso) return "—";
+  const [a, m, g] = iso.slice(0, 10).split("-");
+  return `${g}.${m}.${a}`;
+}
+function dataLunga(iso) {
+  if (!iso) return "—";
+  const [a, m, g] = iso.slice(0, 10).split("-");
+  return `${Number(g)} ${MESI[Number(m) - 1]} ${a}`;
+}
+function oggi() {
+  // Europe/Rome, non il fuso del dispositivo: le scadenze sono italiane.
+  const f = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Rome", year: "numeric", month: "2-digit", day: "2-digit",
+  });
+  return f.format(new Date());
+}
+function giorniFra(da, a) {
+  return Math.round((Date.parse(a + "T00:00:00Z") - Date.parse(da + "T00:00:00Z")) / 86400000);
+}
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SESSIONE E RETE
+   Tutte le richieste di dati sono `no-store`: nulla finisce nella cache del
+   browser né in quella del service worker.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+let sessione = null;
+
+function caricaSessione() {
+  try {
+    const grezza = localStorage.getItem(CHIAVE_SESSIONE);
+    sessione = grezza ? JSON.parse(grezza) : null;
+  } catch { sessione = null; }
+}
+function salvaSessione(s) {
+  sessione = s;
+  try {
+    if (s) localStorage.setItem(CHIAVE_SESSIONE, JSON.stringify(s));
+    else localStorage.removeItem(CHIAVE_SESSIONE);
+  } catch { /* modalità privata: la sessione resta solo in memoria */ }
+}
+
+async function autentica(email, password) {
+  const r = await fetch(`${BASE}/auth/v1/token?grant_type=password`, {
+    method: "POST", cache: "no-store",
+    headers: { apikey: ANON, "content-type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error_description || j.msg || j.message || "Accesso non riuscito");
+  salvaSessione({
+    access_token: j.access_token, refresh_token: j.refresh_token,
+    scade: Date.now() + (j.expires_in ?? 3600) * 1000,
+    utente: { id: j.user.id, email: j.user.email },
+  });
+  return sessione;
+}
+
+async function rinnova() {
+  if (!sessione?.refresh_token) throw new Error("nessuna sessione");
+  const r = await fetch(`${BASE}/auth/v1/token?grant_type=refresh_token`, {
+    method: "POST", cache: "no-store",
+    headers: { apikey: ANON, "content-type": "application/json" },
+    body: JSON.stringify({ refresh_token: sessione.refresh_token }),
+  });
+  if (!r.ok) { salvaSessione(null); throw new Error("sessione scaduta"); }
+  const j = await r.json();
+  salvaSessione({
+    access_token: j.access_token, refresh_token: j.refresh_token,
+    scade: Date.now() + (j.expires_in ?? 3600) * 1000,
+    utente: { id: j.user.id, email: j.user.email },
+  });
+  return sessione;
+}
+
+async function token() {
+  if (!sessione) throw new Error("nessuna sessione");
+  if (Date.now() > sessione.scade - 60000) await rinnova();
+  return sessione.access_token;
+}
+
+async function chiama(percorso, opzioni = {}) {
+  const t = await token();
+  const r = await fetch(`${BASE}${percorso}`, {
+    ...opzioni, cache: "no-store",
+    headers: {
+      apikey: ANON, authorization: `Bearer ${t}`,
+      "cache-control": "no-store", ...(opzioni.headers ?? {}),
+    },
+  });
+  if (r.status === 401) { salvaSessione(null); mostraAccesso(); throw new Error("sessione scaduta"); }
+  return r;
+}
+
+async function leggi(tabella, query = "") {
+  const r = await chiama(`/rest/v1/${tabella}?${query}`);
+  if (!r.ok) throw new Error(`${tabella}: ${await r.text()}`);
+  return r.json();
+}
+
+async function scrivi(tabella, righe, { fondi = true, conflitto = "" } = {}) {
+  if (!righe.length) return 0;
+  let scritte = 0;
+  for (let i = 0; i < righe.length; i += 200) {
+    const blocco = righe.slice(i, i + 200);
+    const q = conflitto ? `?on_conflict=${conflitto}` : "";
+    const r = await chiama(`/rest/v1/${tabella}${q}`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        prefer: fondi ? "resolution=merge-duplicates,return=minimal" : "return=minimal",
+      },
+      body: JSON.stringify(blocco),
+    });
+    if (!r.ok) throw new Error(`${tabella}: ${await r.text()}`);
+    scritte += blocco.length;
+  }
+  return scritte;
+}
+
+async function modifica(tabella, filtro, campi) {
+  const r = await chiama(`/rest/v1/${tabella}?${filtro}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json", prefer: "return=minimal" },
+    body: JSON.stringify(campi),
+  });
+  if (!r.ok) throw new Error(`${tabella}: ${await r.text()}`);
+}
+
+async function traccia(azione, genere, soggetto, motivo) {
+  // L'audit è append-only: il database rifiuta modifiche e cancellazioni.
+  await scrivi("audit_event", [{
+    owner: sessione.utente.id, actor_kind: "user", actor_id: sessione.utente.email,
+    action: azione, subject_kind: genere, subject_id: soggetto,
+    origin: "manual", reason: motivo ?? null,
+  }], { fondi: false }).catch(() => { /* l'audit non deve bloccare l'azione */ });
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   STATO IN MEMORIA
+   I dati non vengono mai scritti su disco dal lato applicazione: vivono
+   nella pagina finché è aperta e spariscono alla chiusura.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const dati = {
+  rapporti: [], identificativi: [], strumenti: [], documenti: [],
+  file: [], copertura: [], attese: [], legami: [], sconosciuti: [],
+};
+
+async function ricarica() {
+  const [rapporti, identificativi, strumenti, documenti, file, copertura, attese, legami, sconosciuti] =
+    await Promise.all([
+      leggi("relationship", "select=*&order=institution_label,display_name"),
+      leggi("relationship_identifier", "select=*"),
+      leggi("payment_instrument", "select=*"),
+      leggi("document", "select=*&order=document_date.desc.nullslast"),
+      leggi("source_file", "select=*&order=display_name"),
+      leggi("coverage", "select=*&order=start_date"),
+      leggi("document_expectation", "select=*&order=due_on"),
+      leggi("document_relationship", "select=*"),
+      leggi("undocumented_relationship", "select=*"),
+    ]);
+  Object.assign(dati, { rapporti, identificativi, strumenti, documenti, file, copertura, attese, legami, sconosciuti });
+}
+
+const perRapporto = (id) => dati.rapporti.find((r) => r.id === id);
+const scadute = () => dati.attese.filter((a) => a.state === "overdue");
+const daConfermare = () => dati.rapporti.filter((r) => r.confirmation === "proposed");
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PAGINE
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const PAGINE = [
+  { id: "",           nome: "Situazione", conta: () => null },
+  { id: "rapporti",   nome: "Rapporti",   conta: () => dati.rapporti.length },
+  { id: "solleciti",  nome: "Solleciti",  conta: () => scadute().length },
+  { id: "documenti",  nome: "Documenti",  conta: () => dati.documenti.length },
+  { id: "carica",     nome: "Carica",     conta: () => null },
+  { id: "impostazioni", nome: "Impostazioni", conta: () => null },
+];
+
+function disegnaTabs(attiva) {
+  document.getElementById("tabs").innerHTML = PAGINE.map((p) => {
+    const n = p.conta();
+    return `<a href="#/${p.id}"${p.id === attiva ? ' aria-current="page"' : ""}>${esc(p.nome)}${
+      n !== null && n !== undefined ? `<span class="n">${n}</span>` : ""}</a>`;
+  }).join("");
+}
+
+function vuoto(testo) { return `<div class="empty">${esc(testo)}</div>`; }
+
+/* ── Situazione ─────────────────────────────────────────────────────────── */
+
+function paginaSituazione() {
+  const oggiIso = oggi();
+  const inRitardo = scadute();
+  const nonConfermati = daConfermare();
+
+  // Copertura: l'intervallo complessivo effettivamente documentato.
+  const inizi = dati.copertura.map((c) => c.start_date).filter(Boolean).sort();
+  const fini  = dati.copertura.map((c) => c.end_date).filter(Boolean).sort();
+
+  const perIstituto = new Map();
+  for (const r of dati.rapporti) {
+    const k = r.institution_label || r.institution_key;
+    if (!perIstituto.has(k)) perIstituto.set(k, []);
+    perIstituto.get(k).push(r);
+  }
+
+  return `
+    <div class="tiles">
+      <a class="tile" href="#/rapporti"><div class="v">${dati.rapporti.length}</div><div class="k">rapporti individuati</div></a>
+      <a class="tile" href="#/documenti"><div class="v">${dati.documenti.length}</div><div class="k">documenti in archivio</div></a>
+      <a class="tile" href="#/solleciti"><div class="v">${inRitardo.length}</div><div class="k">documenti mancanti</div></a>
+      <a class="tile" href="#/rapporti"><div class="v">${nonConfermati.length}</div><div class="k">da confermare</div></a>
+    </div>
+
+    ${dati.rapporti.length === 0 ? `
+      <h2>Non c'è ancora nulla</h2>
+      ${vuoto("Trascina i documenti nella scheda «Carica», oppure importa l'analisi già svolta dalla scheda «Impostazioni».")}
+    ` : ""}
+
+    ${nonConfermati.length ? `
+      <h2>Prima di ogni conto <span class="sub">servono le conferme</span></h2>
+      <div class="card">
+        <p>Ci sono <strong>${nonConfermati.length}</strong> rapporti proposti dall'analisi e non ancora confermati da te.
+        Finché non li confermi, nessun movimento entra nella contabilità: è voluto.</p>
+        <div class="actions"><a class="tile" style="padding:0.45rem 0.85rem;border-color:var(--accent);color:var(--accent);font-weight:600;font-size:0.83rem" href="#/rapporti">Vai ai rapporti</a></div>
+      </div>
+    ` : ""}
+
+    ${inRitardo.length ? `
+      <h2>Documenti che mancano <span class="sub">${inRitardo.length} in ritardo</span></h2>
+      <div class="card">
+        <p>Per alcuni rapporti il periodo non è coperto da nessun documento. Se una carta è stata sostituita,
+        dillo dalla scheda «Solleciti»: il sistema smette di chiedere quella vecchia.</p>
+        <div class="actions"><a class="tile" style="padding:0.45rem 0.85rem;border-color:var(--warn);color:var(--warn);font-weight:600;font-size:0.83rem" href="#/solleciti">Vedi i solleciti</a></div>
+      </div>
+    ` : ""}
+
+    ${perIstituto.size ? `
+      <h2>Per istituto</h2>
+      ${[...perIstituto.entries()].map(([nome, elenco]) => `
+        <div class="card">
+          <h3>${esc(nome)} <span class="badge mute">${elenco.length} ${elenco.length === 1 ? "rapporto" : "rapporti"}</span></h3>
+          <div class="meta">${elenco.map((r) => esc(r.display_name)).join(" · ")}</div>
+        </div>`).join("")}
+    ` : ""}
+
+    ${inizi.length ? `
+      <h2>Periodo documentato</h2>
+      <div class="card">
+        <div class="meta">
+          <span>Dal ${dataLunga(inizi[0])}</span>
+          <span>Al ${dataLunga(fini[fini.length - 1])}</span>
+          <span>${dati.copertura.length} intervalli</span>
+        </div>
+        <div class="note">La copertura non è continua per tutti i rapporti: i buchi sono elencati nella scheda «Solleciti».</div>
+      </div>
+    ` : ""}
+
+    <h2>Contabilità <span class="sub">non ancora avviata</span></h2>
+    <div class="card">
+      <p>I movimenti non sono ancora stati estratti dai documenti, quindi non ci sono ancora spese, entrate
+      né saldi da mostrare. È la fase successiva: prima le anagrafiche e le conferme, poi i numeri.</p>
+      <div class="note risk">Nessun importo mostrato qui sarebbe attendibile finché la contabilità non è alimentata.
+      Preferisco non mostrarne piuttosto che mostrarne di provvisori.</div>
+    </div>
+  `;
+}
+
+/* ── Rapporti ───────────────────────────────────────────────────────────── */
+
+function paginaRapporti() {
+  if (!dati.rapporti.length) return vuoto("Nessun rapporto. Carica dei documenti per cominciare.");
+
+  return dati.rapporti.map((r) => {
+    const ident = dati.identificativi.filter((i) => i.relationship_id === r.id);
+    const strum = dati.strumenti.filter((s) => s.relationship_id === r.id);
+    const docs = dati.legami.filter((l) => l.relationship_id === r.id).length;
+    const cop = dati.copertura.filter((c) => c.relationship_id === r.id);
+    const inizi = cop.map((c) => c.start_date).sort();
+    const fini = cop.map((c) => c.end_date).sort();
+
+    const stato = r.confirmation === "user_confirmed"
+      ? '<span class="badge ok">confermato</span>'
+      : r.disposition === "preselected"
+        ? '<span class="badge warn">proposto, da confermare</span>'
+        : '<span class="badge stop">da verificare a mano</span>';
+
+    const chiuso = r.status === "closed" ? '<span class="badge mute">chiuso</span>' : "";
+
+    const GENERE = {
+      cash_account: "conto", credit_facility: "carta di credito",
+      securities_dossier: "dossier titoli", payment_instrument: "strumento",
+      insurance_policy: "polizza", loan: "finanziamento",
+    };
+
+    return `
+      <div class="card">
+        <h3>${esc(r.display_name)} ${stato} ${chiuso}</h3>
+        <p>${esc(r.institution_label || r.institution_key)} · ${esc(GENERE[r.entity_kind] ?? r.entity_kind)}${
+          r.currency ? ` · ${esc(r.currency)}` : ""}</p>
+        <div class="meta">
+          <span>${docs} document${docs === 1 ? "o" : "i"}</span>
+          ${r.cadence ? `<span>cadenza ${esc(r.cadence === "monthly" ? "mensile" : r.cadence === "quarterly" ? "trimestrale" : r.cadence === "yearly" ? "annuale" : r.cadence)}</span>` : ""}
+          ${inizi.length ? `<span>${dataBreve(inizi[0])} → ${dataBreve(fini[fini.length - 1])}</span>` : ""}
+          <span>attendibilità ${(r.confidence * 100).toFixed(0)}%</span>
+        </div>
+        ${ident.length ? `<div class="meta">${ident.map((i) =>
+          `<span><code>${esc(i.masked)}</code> ${esc(i.strength === "strong" ? "forte" : i.strength === "medium" ? "medio" : "debole")}</span>`).join("")}</div>` : ""}
+        ${strum.length ? `<div class="note proof">Carte: ${strum.map((s) => esc(s.masked_pan)).join(" → ")}</div>` : ""}
+        ${r.confirmation === "proposed" ? `
+          <div class="actions">
+            <button class="act" data-conferma="${esc(r.id)}">Confermo, è mio</button>
+            <button class="act ghost" data-rifiuta="${esc(r.id)}">Non è mio</button>
+          </div>` : ""}
+      </div>`;
+  }).join("") + (dati.sconosciuti.length ? `
+    <h2>Nominati ma senza documenti <span class="sub">${dati.sconosciuti.length}</span></h2>
+    ${dati.sconosciuti.map((s) => `
+      <div class="card">
+        <h3>${esc(s.identifier_mask)} <span class="badge mute">nessun documento</span></h3>
+        <p>${esc(s.institution_key)} · citato in ${s.mentioned_in} documenti di altri rapporti</p>
+        <div class="note">${esc(s.rationale)}</div>
+      </div>`).join("")}` : "");
+}
+
+/* ── Solleciti: il punto in cui si chiede della carta sostitutiva ───────── */
+
+function paginaSolleciti() {
+  const oggiIso = oggi();
+  const inRitardo = dati.attese.filter((a) => a.state === "overdue");
+  const attesa = dati.attese.filter((a) => a.state === "awaiting");
+  const future = dati.attese.filter((a) => a.state === "not_yet_due");
+
+  if (!dati.attese.length) return vuoto("Nessuna attesa di documenti: non ci sono ancora rapporti con una cadenza riconosciuta.");
+
+  // Raggruppo per rapporto: la domanda sulla sostituzione si fa una volta per
+  // rapporto, non una volta per mese mancante.
+  const gruppi = new Map();
+  for (const a of inRitardo) {
+    if (!gruppi.has(a.relationship_id)) gruppi.set(a.relationship_id, []);
+    gruppi.get(a.relationship_id).push(a);
+  }
+
+  const blocchi = [...gruppi.entries()].map(([idRapporto, elenco]) => {
+    const r = perRapporto(idRapporto);
+    if (!r) return "";
+    const strum = dati.strumenti.filter((s) => s.relationship_id === idRapporto);
+    const ordinati = elenco.slice().sort((x, y) => x.due_on < y.due_on ? -1 : 1);
+    const primo = ordinati[0], ultimo = ordinati[ordinati.length - 1];
+    const ritardo = giorniFra(ultimo.due_on, oggiIso);
+    const eCarta = r.entity_kind === "credit_facility" || strum.length > 0;
+
+    return `
+      <div class="card">
+        <h3>${esc(r.display_name)} <span class="badge stop">${elenco.length} mancant${elenco.length === 1 ? "e" : "i"}</span></h3>
+        <p>${esc(r.institution_label || r.institution_key)}</p>
+        <div class="meta">
+          <span>Dal ${dataBreve(primo.period_start)} al ${dataBreve(ultimo.period_end)}</span>
+          <span>l'ultimo era atteso il ${dataBreve(ultimo.due_on)}</span>
+          ${ritardo > 0 ? `<span>${ritardo} giorni fa</span>` : ""}
+        </div>
+        ${strum.length ? `<div class="note">Ultima carta conosciuta: <code>${esc(strum[strum.length - 1].masked_pan)}</code></div>` : ""}
+
+        <div class="note risk">Il documento non è arrivato. Questo, da solo, non significa che il rapporto sia chiuso:
+        potrebbe essere solo un documento che non hai ancora caricato.${
+          eCarta ? " Oppure la carta è scaduta ed è stata sostituita con una nuova." : ""}</div>
+
+        <div class="actions">
+          ${eCarta ? `<button class="act" data-sostituita="${esc(r.id)}">La carta è stata sostituita</button>` : ""}
+          <button class="act ghost" data-chiuso="${esc(r.id)}">Il rapporto è chiuso</button>
+          <button class="act ghost" data-caricare="${esc(r.id)}">Devo solo caricare il documento</button>
+        </div>
+        <div id="modulo-${esc(r.id)}"></div>
+      </div>`;
+  }).join("");
+
+  return `
+    ${inRitardo.length ? `<h2>In ritardo <span class="sub">${inRitardo.length} document${inRitardo.length === 1 ? "o" : "i"}</span></h2>${blocchi}`
+      : `<h2>In ritardo</h2>${vuoto("Nessun documento in ritardo.")}`}
+
+    ${attesa.length ? `
+      <h2>In attesa <span class="sub">${attesa.length}</span></h2>
+      <div class="card"><p>Attesi ma ancora dentro la tolleranza: non è il caso di preoccuparsi.</p>
+      <div class="meta">${attesa.slice(0, 12).map((a) => {
+        const r = perRapporto(a.relationship_id);
+        return `<span>${esc(r?.display_name ?? "—")} · ${dataBreve(a.due_on)}</span>`;
+      }).join("")}</div></div>` : ""}
+
+    ${future.length ? `
+      <h2>Prossimi <span class="sub">${future.length}</span></h2>
+      <div class="card"><div class="meta">${future.slice(0, 8).map((a) => {
+        const r = perRapporto(a.relationship_id);
+        return `<span>${esc(r?.display_name ?? "—")} · atteso il ${dataBreve(a.due_on)}</span>`;
+      }).join("")}</div></div>` : ""}
+  `;
+}
+
+function moduloSostituzione(idRapporto) {
+  const r = perRapporto(idRapporto);
+  const strum = dati.strumenti.filter((s) => s.relationship_id === idRapporto);
+  const ultima = strum.length ? strum[strum.length - 1] : null;
+  return `
+    <div class="card" style="margin-top:0.7rem;background:var(--surface-2)">
+      <h3>Carta sostitutiva</h3>
+      <p>Il rapporto con ${esc(r.institution_label || r.institution_key)} continua, ma con una carta nuova.
+      ${ultima ? `La precedente era <code>${esc(ultima.masked_pan)}</code>.` : ""}</p>
+      <label class="campo"><span>Ultime quattro cifre della carta nuova</span>
+        <input type="text" id="pan-${esc(idRapporto)}" inputmode="numeric" maxlength="4" placeholder="1234"></label>
+      <label class="campo"><span>Da quando è in uso (se lo sai)</span>
+        <input type="text" id="dal-${esc(idRapporto)}" placeholder="gg.mm.aaaa" inputmode="numeric"></label>
+      <div class="note">Non chiedo mai il numero completo, né il codice di sicurezza, né il PIN. Le ultime quattro
+      cifre bastano a riconoscere la carta nei documenti e non permettono di usarla.</div>
+      <div class="actions">
+        <button class="act" data-salva-sostituzione="${esc(idRapporto)}">Registra la sostituzione</button>
+        <button class="act ghost" data-annulla="${esc(idRapporto)}">Annulla</button>
+      </div>
+      <div id="esito-${esc(idRapporto)}"></div>
+    </div>`;
+}
+
+async function registraSostituzione(idRapporto) {
+  const box = document.getElementById(`esito-${idRapporto}`);
+  const pan = (document.getElementById(`pan-${idRapporto}`).value || "").replace(/\D/g, "");
+  const dalGrezzo = (document.getElementById(`dal-${idRapporto}`).value || "").trim();
+
+  if (pan.length !== 4) { box.innerHTML = `<div class="avviso err">Servono esattamente quattro cifre.</div>`; return; }
+  let dal = null;
+  if (dalGrezzo) {
+    const m = dalGrezzo.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/);
+    if (!m) { box.innerHTML = `<div class="avviso err">La data va scritta come gg.mm.aaaa.</div>`; return; }
+    dal = `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+  }
+
+  const r = perRapporto(idRapporto);
+  const strum = dati.strumenti.filter((s) => s.relationship_id === idRapporto);
+  const precedente = strum.length ? strum[strum.length - 1] : null;
+
+  try {
+    // La carta nuova sostituisce la vecchia. La successione è dichiarata da
+    // te, quindi è confermata: non è un'ipotesi dell'algoritmo.
+    const nuova = {
+      owner: sessione.utente.id, relationship_id: idRapporto,
+      institution_key: r.institution_key, masked_pan: `••••${pan}`,
+      valid_from: dal, replaces_id: precedente?.id ?? null,
+      succession_status: "user_confirmed", succession_rung: "explicit_document",
+      succession_proof: "Sostituzione dichiarata dall'intestatario in risposta a un sollecito",
+    };
+    await scrivi("payment_instrument", [nuova], { fondi: false });
+
+    // La vecchia carta smette di essere valida e non viene più sollecitata.
+    if (precedente && dal) {
+      await modifica("payment_instrument", `id=eq.${precedente.id}`, { valid_to: dal });
+    }
+    await modifica(
+      "document_expectation",
+      `relationship_id=eq.${idRapporto}&state=eq.overdue`,
+      { state: "superseded_by_substitution",
+        rationale: "Carta sostituita: il documento mancante riguardava lo strumento precedente" },
+    );
+    await traccia("instrument.succession.confirm", "relationship", idRapporto,
+      `Carta sostitutiva ••••${pan}`);
+
+    box.innerHTML = `<div class="avviso ok">Registrata. Non ti chiederò più i documenti della carta precedente.</div>`;
+    await ricarica();
+    setTimeout(disegna, 900);
+  } catch (e) {
+    box.innerHTML = `<div class="avviso err">${esc(e.message)}</div>`;
+  }
+}
+
+async function chiudiRapporto(idRapporto) {
+  const r = perRapporto(idRapporto);
+  if (!confirm(`Confermi che «${r.display_name}» è chiuso?\n\nSmetterò di chiedere i suoi documenti. Quelli già caricati restano.`)) return;
+  await modifica("relationship", `id=eq.${idRapporto}`,
+    { status: "closed", closed_on: oggi(), closure_evidence: "user_confirmed", updated_at: new Date().toISOString() });
+  await modifica("document_expectation",
+    `relationship_id=eq.${idRapporto}&state=in.(overdue,awaiting,not_yet_due)`,
+    { state: "not_expected_closed", rationale: "Rapporto dichiarato chiuso dall'intestatario" });
+  await traccia("relationship.close", "relationship", idRapporto, "Chiusura dichiarata dall'intestatario");
+  await ricarica();
+  disegna();
+}
+
+/* ── Documenti ──────────────────────────────────────────────────────────── */
+
+const TIPI = {
+  bank_account_statement: "estratto conto", credit_card_statement: "estratto carta",
+  card_settlement_notice: "avviso di addebito", debit_card_movement_list: "movimenti carta",
+  securities_statement: "rendiconto titoli", securities_order_note: "eseguito titoli",
+  advisory_report: "rendiconto consulenza", expense_summary: "riepilogo spese",
+  summary_document: "documento di sintesi", transfer_receipt: "contabile bonifico",
+  tax_receipt: "documento fiscale", insurance_policy: "polizza",
+  contract_change: "variazione contrattuale", service_notice: "comunicazione",
+  unknown: "non riconosciuto",
+};
+
+let filtroDoc = { istituto: "", tipo: "" };
+
+function paginaDocumenti() {
+  if (!dati.documenti.length) return vuoto("Nessun documento in archivio.");
+
+  const istituti = [...new Set(dati.documenti.map((d) => d.institution_key).filter(Boolean))].sort();
+  const tipi = [...new Set(dati.documenti.map((d) => d.document_type))].sort();
+
+  const elenco = dati.documenti.filter((d) =>
+    (!filtroDoc.istituto || d.institution_key === filtroDoc.istituto) &&
+    (!filtroDoc.tipo || d.document_type === filtroDoc.tipo));
+
+  const perFile = new Map(dati.file.map((f) => [f.id, f]));
+
+  return `
+    <div class="card">
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+        <select id="filtro-istituto" style="flex:1;min-width:150px">
+          <option value="">Tutti gli istituti</option>
+          ${istituti.map((i) => `<option value="${esc(i)}"${filtroDoc.istituto === i ? " selected" : ""}>${esc(i)}</option>`).join("")}
+        </select>
+        <select id="filtro-tipo" style="flex:1;min-width:150px">
+          <option value="">Tutti i tipi</option>
+          ${tipi.map((t) => `<option value="${esc(t)}"${filtroDoc.tipo === t ? " selected" : ""}>${esc(TIPI[t] ?? t)}</option>`).join("")}
+        </select>
+      </div>
+      <div class="meta"><span>${elenco.length} di ${dati.documenti.length}</span></div>
+    </div>
+
+    <div class="scorri"><table class="dati">
+      <thead><tr><th>Documento</th><th>Tipo</th><th>Data</th><th class="num">Saldo finale</th></tr></thead>
+      <tbody>${elenco.slice(0, 300).map((d) => {
+        const f = perFile.get(d.source_file_id);
+        return `<tr>
+          <td>${esc(f?.display_name ?? "—")}${d.ambiguous ? ' <span class="badge warn">ambiguo</span>' : ""}</td>
+          <td>${esc(TIPI[d.document_type] ?? d.document_type)}</td>
+          <td>${dataBreve(d.document_date)}</td>
+          <td class="num">${d.closing_minor !== null ? formattaCentesimi(d.closing_minor, d.currency ?? "EUR") : "—"}</td>
+        </tr>`;
+      }).join("")}</tbody>
+    </table></div>
+    ${elenco.length > 300 ? `<div class="note">Mostrati i primi 300. Restringi con i filtri per vedere gli altri.</div>` : ""}
+  `;
+}
+
+/* ── Carica ─────────────────────────────────────────────────────────────── */
+
+function paginaCarica() {
+  return `
+    <h2>Aggiungi documenti</h2>
+    <div id="zona">
+      <p style="margin:0 0 0.8rem"><strong>Trascina qui i file</strong><br>PDF, CSV, XLSX o TXT</p>
+      <button class="act" id="scegli">Scegli dal dispositivo</button>
+      <input type="file" id="input-file" multiple hidden
+             accept=".pdf,.csv,.txt,.xls,.xlsx,application/pdf,text/csv,text/plain">
+    </div>
+    <div id="esito-carica"></div>
+
+    <h2>Copia sul computer</h2>
+    <div class="card" id="cartella-locale">
+      <p>Se vuoi, ogni file caricato può essere scritto anche in una cartella del tuo computer,
+      così hai sempre una copia fuori dal sistema.</p>
+      <div class="actions">
+        <button class="act ghost" id="scegli-cartella">Scegli la cartella</button>
+      </div>
+      <div class="note" id="stato-cartella">Non impostata. Funziona su Chrome ed Edge da computer; su telefono e su Safari no.</div>
+    </div>
+
+    <h2>Come funziona</h2>
+    <div class="card">
+      <p>Ogni file viene identificato dal suo contenuto, non dal nome: lo stesso documento caricato
+      due volte con nomi diversi viene riconosciuto e non entra due volte.</p>
+      <div class="note proof">I file restano nel tuo archivio privato. Nessuno può leggerli senza le tue credenziali.</div>
+    </div>`;
+}
+
+async function impronta(file) {
+  const buf = await file.arrayBuffer();
+  const h = await crypto.subtle.digest("SHA-256", buf);
+  return [...new Uint8Array(h)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+let cartellaLocale = null;
+
+async function caricaFile(elenco) {
+  const box = document.getElementById("esito-carica");
+  const files = [...elenco].filter((f) => f.size > 0);
+  if (!files.length) return;
+
+  box.innerHTML = `<div class="card"><h3>Caricamento</h3>
+    <p id="carica-stato">Preparazione…</p>
+    <div class="riga-progresso"><i id="carica-barra"></i></div></div>`;
+  const stato = document.getElementById("carica-stato");
+  const barra = document.getElementById("carica-barra");
+
+  // Un lotto per ogni caricamento: serve a poterlo annullare per intero.
+  const idLotto = crypto.randomUUID();
+  await scrivi("import_batch", [{
+    id: idLotto, owner: sessione.utente.id, state: "uploading",
+    file_count: files.length, note: `Caricamento dall'app, ${files.length} file`,
+  }], { fondi: false });
+
+  const noti = new Set(dati.file.map((f) => f.content_hash));
+  let caricati = 0, saltati = 0, falliti = [];
+
+  for (let i = 0; i < files.length; i++) {
+    const f = files[i];
+    stato.textContent = `${i + 1} di ${files.length} — ${f.name}`;
+    barra.style.width = `${((i) / files.length) * 100}%`;
+    try {
+      const hash = await impronta(f);
+      if (noti.has(hash)) { saltati++; continue; }
+      noti.add(hash);
+
+      const nome = f.name.replace(/[^\p{L}\p{N}._ -]/gu, "_");
+      const percorso = `${sessione.utente.id}/${idLotto}/${hash.slice(0, 12)}-${nome}`;
+
+      const r = await chiama(`/storage/v1/object/${BUCKET}/${percorso}`, {
+        method: "POST",
+        headers: { "content-type": f.type || "application/octet-stream", "x-upsert": "true" },
+        body: f,
+      });
+      if (!r.ok) throw new Error((await r.text()).slice(0, 200));
+
+      await scrivi("source_file", [{
+        id: crypto.randomUUID(), owner: sessione.utente.id, batch_id: idLotto,
+        display_name: f.name, byte_length: f.size, content_hash: hash,
+        normalized_hash: null, page_count: 0, storage_path: percorso, state: "queued",
+      }], { fondi: false });
+
+      if (cartellaLocale) await scriviInCartella(f);
+      caricati++;
+    } catch (e) {
+      falliti.push(`${f.name}: ${e.message}`);
+    }
+  }
+
+  barra.style.width = "100%";
+  await scrivi("import_batch", [{
+    id: idLotto, owner: sessione.utente.id,
+    state: falliti.length ? "completed_with_warnings" : "completed",
+    finished_at: new Date().toISOString(), file_count: files.length,
+    note: `${caricati} caricati, ${saltati} già presenti, ${falliti.length} non riusciti`,
+  }]);
+  await traccia("batch.upload", "import_batch", idLotto, `${caricati} file caricati`);
+
+  box.innerHTML = `
+    <div class="avviso ok">${caricati} file caricat${caricati === 1 ? "o" : "i"}${
+      saltati ? `, ${saltati} già present${saltati === 1 ? "e" : "i"} e quindi ignorat${saltati === 1 ? "o" : "i"}` : ""}.</div>
+    ${falliti.length ? `<div class="avviso err">${falliti.length} non riuscit${falliti.length === 1 ? "o" : "i"}:<br>${
+      falliti.slice(0, 5).map(esc).join("<br>")}</div>` : ""}
+    <div class="card"><div class="note risk">I file sono in archivio ma non ancora letti: l'estrazione dei
+    movimenti è la fase successiva. Non spariscono, restano in attesa.</div></div>`;
+
+  await ricarica();
+  disegnaTabs(pagina());
+}
+
+async function scriviInCartella(file) {
+  try {
+    const h = await cartellaLocale.getFileHandle(file.name, { create: true });
+    const w = await h.createWritable();
+    await w.write(await file.arrayBuffer());
+    await w.close();
+  } catch { /* la copia locale è un di più: se non riesce, il caricamento vale comunque */ }
+}
+
+/* ── Impostazioni ───────────────────────────────────────────────────────── */
+
+function paginaImpostazioni() {
+  return `
+    <h2>Accesso</h2>
+    <div class="card">
+      <h3>${esc(sessione.utente.email)}</h3>
+      <p>Cambia la parola d'accesso. Se stai usando ancora quella che ti è stata consegnata, cambiala adesso.</p>
+      <label class="campo"><span>Nuova parola d'accesso (almeno 12 caratteri)</span>
+        <input type="password" id="nuova-password" autocomplete="new-password"></label>
+      <label class="campo"><span>Ripetila</span>
+        <input type="password" id="ripeti-password" autocomplete="new-password"></label>
+      <div class="actions"><button class="act" id="cambia-password">Cambia</button></div>
+      <div id="esito-password"></div>
+    </div>
+
+    <h2>Importa l'analisi già svolta</h2>
+    <div class="card">
+      <p>Il file <code>analisi-iniziale.json</code> contiene i rapporti, i documenti e le scadenze
+      ricavati dai documenti già esaminati. Va importato una volta sola; reimportarlo non duplica nulla.</p>
+      <div class="actions">
+        <button class="act ghost" id="scegli-analisi">Scegli il file</button>
+        <input type="file" id="input-analisi" accept=".json,application/json" hidden>
+      </div>
+      <div id="esito-analisi"></div>
+    </div>
+
+    <h2>Uscita</h2>
+    <div class="card">
+      <p>Uscendo, il dispositivo dimentica la sessione e svuota ogni memoria locale dell'app.</p>
+      <div class="actions"><button class="act pericolo" id="esci">Esci e cancella tutto dal dispositivo</button></div>
+    </div>
+
+    <h2>Come sono protetti i dati</h2>
+    <div class="card">
+      <div class="note proof">Ogni riga del database è legata alla tua utenza: il database stesso rifiuta
+      di restituirla a chiunque altro, anche a chi conoscesse l'indirizzo dell'app.</div>
+      <div class="note proof">I documenti stanno in un archivio privato, raggiungibile solo con la tua sessione.</div>
+      <div class="note">L'app non conserva copie dei dati sul dispositivo: senza rete si apre, ma non mostra numeri.
+      È voluto — è la stessa ragione per cui non c'è nulla da recuperare se perdi il telefono.</div>
+      <div class="note">Il sistema non esegue e non può eseguire operazioni sui tuoi conti: legge documenti, non muove denaro.</div>
+    </div>`;
+}
+
+async function cambiaPassword() {
+  const box = document.getElementById("esito-password");
+  const a = document.getElementById("nuova-password").value;
+  const b = document.getElementById("ripeti-password").value;
+  if (a.length < 12) { box.innerHTML = `<div class="avviso err">Servono almeno 12 caratteri.</div>`; return; }
+  if (a !== b) { box.innerHTML = `<div class="avviso err">Le due parole d'accesso non coincidono.</div>`; return; }
+  try {
+    const r = await chiama("/auth/v1/user", {
+      method: "PUT", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ password: a }),
+    });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).msg || "non riuscito");
+    box.innerHTML = `<div class="avviso ok">Cambiata.</div>`;
+    document.getElementById("nuova-password").value = "";
+    document.getElementById("ripeti-password").value = "";
+  } catch (e) { box.innerHTML = `<div class="avviso err">${esc(e.message)}</div>`; }
+}
+
+async function importaAnalisi(file) {
+  const box = document.getElementById("esito-analisi");
+  box.innerHTML = `<div class="card"><p id="imp-stato">Lettura del file…</p>
+    <div class="riga-progresso"><i id="imp-barra"></i></div></div>`;
+  const stato = document.getElementById("imp-stato");
+  const barra = document.getElementById("imp-barra");
+
+  try {
+    const contenuto = JSON.parse(await file.text());
+    if (contenuto.versione !== 1 || !contenuto.ordine) throw new Error("Il file non ha il formato atteso.");
+
+    const CONFLITTI = { document_relationship: "owner,document_id,relationship_id" };
+    const totale = contenuto.ordine.length;
+    let righeTotali = 0;
+
+    for (let i = 0; i < totale; i++) {
+      const tabella = contenuto.ordine[i];
+      const righe = (contenuto.tabelle[tabella] ?? []).map((r) => ({ ...r, owner: sessione.utente.id }));
+      stato.textContent = `${tabella} — ${righe.length} righe`;
+      barra.style.width = `${(i / totale) * 100}%`;
+      righeTotali += await scrivi(tabella, righe, { fondi: true, conflitto: CONFLITTI[tabella] ?? "" });
+    }
+
+    barra.style.width = "100%";
+    await traccia("import.snapshot", "import_batch", "analisi-iniziale", `${righeTotali} righe importate`);
+    box.innerHTML = `<div class="avviso ok">Importate ${righeTotali} righe.</div>`;
+    await ricarica();
+    setTimeout(() => { location.hash = "#/"; disegna(); }, 800);
+  } catch (e) {
+    box.innerHTML = `<div class="avviso err">${esc(e.message)}</div>`;
+  }
+}
+
+async function esci() {
+  if (!confirm("Uscire e cancellare ogni traccia dell'app da questo dispositivo?")) return;
+  try { await chiama("/auth/v1/logout", { method: "POST" }); } catch { /* la sessione va chiusa comunque */ }
+  salvaSessione(null);
+  try {
+    const reg = await navigator.serviceWorker?.getRegistration();
+    reg?.active?.postMessage("cp:logout");
+  } catch { /* nessun service worker: niente da svuotare */ }
+  try { localStorage.clear(); sessionStorage.clear(); } catch { /* modalità privata */ }
+  location.hash = "";
+  location.reload();
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   INTERFACCIA
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const pagina = () => (location.hash.replace(/^#\/?/, "") || "");
+
+function disegna() {
+  const p = pagina();
+  disegnaTabs(p);
+  const main = document.getElementById("pagina");
+  const corpi = {
+    "": paginaSituazione, rapporti: paginaRapporti, solleciti: paginaSolleciti,
+    documenti: paginaDocumenti, carica: paginaCarica, impostazioni: paginaImpostazioni,
+  };
+  main.innerHTML = (corpi[p] ?? paginaSituazione)();
+  window.scrollTo(0, 0);
+  collega(p);
+}
+
+function collega(p) {
+  if (p === "carica") {
+    const zona = document.getElementById("zona");
+    const input = document.getElementById("input-file");
+    document.getElementById("scegli").onclick = () => input.click();
+    input.onchange = () => caricaFile(input.files);
+    for (const ev of ["dragenter", "dragover"])
+      zona.addEventListener(ev, (e) => { e.preventDefault(); zona.classList.add("sopra"); });
+    for (const ev of ["dragleave", "drop"])
+      zona.addEventListener(ev, (e) => { e.preventDefault(); zona.classList.remove("sopra"); });
+    zona.addEventListener("drop", (e) => { e.preventDefault(); caricaFile(e.dataTransfer.files); });
+
+    const bottone = document.getElementById("scegli-cartella");
+    const stato = document.getElementById("stato-cartella");
+    if (!window.showDirectoryPicker) {
+      bottone.disabled = true;
+      stato.textContent = "Questo browser non sa scrivere in una cartella del computer. Su Chrome o Edge da computer funziona.";
+    } else {
+      if (cartellaLocale) stato.textContent = `Copia attiva nella cartella «${cartellaLocale.name}».`;
+      bottone.onclick = async () => {
+        try {
+          cartellaLocale = await window.showDirectoryPicker({ mode: "readwrite" });
+          stato.textContent = `Copia attiva nella cartella «${cartellaLocale.name}». Vale finché la scheda resta aperta.`;
+        } catch { /* scelta annullata */ }
+      };
+    }
+  }
+
+  if (p === "documenti") {
+    document.getElementById("filtro-istituto").onchange = (e) => { filtroDoc.istituto = e.target.value; disegna(); };
+    document.getElementById("filtro-tipo").onchange = (e) => { filtroDoc.tipo = e.target.value; disegna(); };
+  }
+
+  if (p === "impostazioni") {
+    document.getElementById("cambia-password").onclick = cambiaPassword;
+    document.getElementById("esci").onclick = esci;
+    const inp = document.getElementById("input-analisi");
+    document.getElementById("scegli-analisi").onclick = () => inp.click();
+    inp.onchange = () => inp.files[0] && importaAnalisi(inp.files[0]);
+  }
+
+  document.getElementById("pagina").onclick = async (e) => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    const d = b.dataset;
+
+    if (d.conferma) {
+      await modifica("relationship", `id=eq.${d.conferma}`,
+        { confirmation: "user_confirmed", updated_at: new Date().toISOString() });
+      await modifica("relationship_identifier",
+        `relationship_id=eq.${d.conferma}&strength=eq.strong`, { status: "verified" });
+      await traccia("relationship.confirm", "relationship", d.conferma, "Confermato dall'intestatario");
+      await ricarica(); disegna();
+    }
+    if (d.rifiuta) {
+      if (!confirm("Segnare questo rapporto come non tuo? Resterà in archivio, escluso da tutto il resto.")) return;
+      await modifica("relationship", `id=eq.${d.rifiuta}`,
+        { confirmation: "rejected", updated_at: new Date().toISOString() });
+      await traccia("relationship.reject", "relationship", d.rifiuta, "Non riconosciuto dall'intestatario");
+      await ricarica(); disegna();
+    }
+    if (d.sostituita) document.getElementById(`modulo-${d.sostituita}`).innerHTML = moduloSostituzione(d.sostituita);
+    if (d.annulla) document.getElementById(`modulo-${d.annulla}`).innerHTML = "";
+    if (d.salvaSostituzione) await registraSostituzione(d.salvaSostituzione);
+    if (d.chiuso) await chiudiRapporto(d.chiuso);
+    if (d.caricare) {
+      document.getElementById(`modulo-${d.caricare}`).innerHTML =
+        `<div class="note proof">Va bene: il sollecito resta finché il documento non arriva.
+         Caricalo dalla scheda «Carica» quando ce l'hai.</div>`;
+    }
+  };
+}
+
+function mostraAccesso() {
+  document.getElementById("app").hidden = true;
+  document.getElementById("accesso").hidden = false;
+}
+
+async function mostraApp() {
+  document.getElementById("accesso").hidden = true;
+  document.getElementById("app").hidden = false;
+  document.getElementById("sottotitolo").textContent = sessione.utente.email;
+  try {
+    await ricarica();
+  } catch (e) {
+    document.getElementById("pagina").innerHTML =
+      `<div class="avviso err">Non riesco a leggere i dati: ${esc(e.message)}</div>`;
+    return;
+  }
+  disegna();
+}
+
+document.getElementById("modulo-accesso").onsubmit = async (e) => {
+  e.preventDefault();
+  const b = document.getElementById("pulsante-accesso");
+  const avviso = document.getElementById("accesso-avviso");
+  b.disabled = true; b.textContent = "Verifico…"; avviso.innerHTML = "";
+  try {
+    await autentica(document.getElementById("email").value.trim(),
+                    document.getElementById("password").value);
+    document.getElementById("password").value = "";
+    await mostraApp();
+  } catch (err) {
+    avviso.innerHTML = `<div class="avviso err">${esc(err.message)}</div>`;
+  } finally {
+    b.disabled = false; b.textContent = "Entra";
+  }
+};
+
+document.getElementById("aggiorna").onclick = async () => {
+  const b = document.getElementById("aggiorna");
+  b.disabled = true; b.textContent = "…";
+  try { await ricarica(); disegna(); } catch { /* la pagina resta com'è */ }
+  b.disabled = false; b.textContent = "Aggiorna";
+};
+
+window.addEventListener("hashchange", () => { if (sessione) disegna(); });
+
+caricaSessione();
+if (sessione) {
+  rinnova().then(mostraApp).catch(mostraAccesso);
+} else {
+  mostraAccesso();
+}
+
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("./sw.js").catch(() => { /* l'app funziona lo stesso */ });
+}
+</script>
