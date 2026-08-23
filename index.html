@@ -433,6 +433,7 @@ const PAGINE = [
   { id: "analisi",    nome: "Analisi",    conta: () => null },
   { id: "movimenti",  nome: "Movimenti",  conta: () => dati.movimenti.length || null },
   { id: "solleciti",  nome: "Solleciti",  conta: () => scadute().length },
+  { id: "letture",    nome: "Letture",    conta: () => daGuardare().length || null },
   { id: "documenti",  nome: "Documenti",  conta: () => dati.documenti.length },
   { id: "carica",     nome: "Carica",     conta: () => null },
   { id: "impostazioni", nome: "Impostazioni", conta: () => null },
@@ -448,12 +449,136 @@ function disegnaTabs(attiva) {
 
 function vuoto(testo) { return `<div class="empty">${esc(testo)}</div>`; }
 
+/* ── Che fine ha fatto ogni documento ───────────────────────────────────────
+   Le banche cambiano il formato degli export senza dirlo. Quando succede, il
+   lettore non va in errore: smette semplicemente di trovare le righe, e il
+   totale scende. Un numero più basso del vero è il guasto peggiore, perché
+   sembra giusto.
+   Per questo ogni documento porta un esito, e gli esiti che significano
+   «non è entrato» diventano un avviso che non si può non vedere.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+const ESITO = {
+  importato:          { nome: "Letto e importato", badge: "ok", guarda: false,
+    spiega: "Le sue righe sono nel libro mastro." },
+  senza_movimenti:    { nome: "Senza movimenti", badge: "mute", guarda: false,
+    spiega: "È un documento informativo: non contiene movimenti, e non deve contenerne." },
+  usato_per_verifica: { nome: "Usato per verifica", badge: "mute", guarda: false,
+    spiega: "Serve a confermare i totali di un altro documento." },
+  gia_sul_conto:      { nome: "Già sul conto", badge: "mute", guarda: false,
+    spiega: "Le operazioni sono già sul conto corrente. Caricarle anche da qui vorrebbe dire contarle due volte." },
+  gia_altrove:        { nome: "Già in un altro documento", badge: "mute", guarda: false,
+    spiega: "Le stesse operazioni sono in un'estrazione più ampia dello stesso rapporto." },
+  conto_vuoto:        { nome: "Conto fermo", badge: "mute", guarda: false,
+    spiega: "Nel periodo non c'è nessuna operazione. Il conto esiste ma non è stato usato." },
+  doppione:           { nome: "Doppione", badge: "mute", guarda: false,
+    spiega: "Stesso contenuto di un altro file già letto. Non viene contato due volte." },
+  non_quadra:         { nome: "Non quadra", badge: "warn", guarda: true,
+    spiega: "Il documento è stato riconosciuto, ma le righe lette non ricostruiscono i totali che dichiara. "
+          + "È stato tenuto fuori apposta: meglio un periodo in meno che un periodo sbagliato." },
+  formato_sconosciuto:{ nome: "Formato non riconosciuto", badge: "err", guarda: true,
+    spiega: "Nessun formato conosciuto riconosce questo documento. Se è un estratto conto, "
+          + "la banca ha cambiato l'export e serve un lettore nuovo." },
+  illeggibile:        { nome: "Illeggibile", badge: "err", guarda: true,
+    spiega: "Non se ne ricava testo: può essere la scansione di un foglio, o un file protetto." },
+  null:               { nome: "Non ancora esaminato", badge: "mute", guarda: false,
+    spiega: "Questo file non è ancora passato dal controllo di lettura." },
+};
+const esitoDi = (f) => ESITO[f.read_outcome] ?? ESITO.null;
+const daGuardare = () => dati.file.filter((f) => esitoDi(f).guarda);
+
+function paginaLetture() {
+  const problemi = daGuardare();
+  const perEsito = new Map();
+  for (const f of dati.file) {
+    const k = f.read_outcome ?? "null";
+    perEsito.set(k, (perEsito.get(k) ?? 0) + 1);
+  }
+
+  const chiesti = problemi.filter((f) => f.reprocess_requested_at).length;
+
+  return `
+    <div class="card">
+      <h2>Che fine ha fatto ogni documento</h2>
+      <p class="note">Un documento che non entra nei conti deve dirlo. Qui c'è l'esito di
+      lettura di tutti i ${dati.file.length} file dell'archivio: quelli in fondo alla lista
+      sono quelli su cui vale la pena guardare.</p>
+      <div class="meta">${[...perEsito.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .map(([k, n]) => `<span>${esc((ESITO[k] ?? ESITO.null).nome)} <strong>${n}</strong></span>`).join("")}</div>
+    </div>
+
+    ${problemi.length ? `
+      <div class="avviso ${problemi.some((f) => esitoDi(f).badge === "err") ? "err" : "warn"}">
+        <strong>${problemi.length} document${problemi.length === 1 ? "o non è entrato" : "i non sono entrati"} nei conti.</strong>
+        Finché restano fuori, le spese e le entrate di quei periodi sono più basse del vero.
+        ${chiesti ? `Per ${chiesti} hai già chiesto la rielaborazione.` : ""}
+      </div>
+
+      ${problemi.map((f) => {
+        const e = esitoDi(f);
+        return `
+        <div class="card">
+          <h3><span class="badge ${e.badge}">${esc(e.nome)}</span> ${esc(f.display_name)}</h3>
+          <div class="meta">
+            <span>${(f.byte_length / 1024).toFixed(0)} kB</span>
+            ${f.read_note ? `<span>formato riconosciuto: ${esc(f.read_note)}</span>` : ""}
+            ${f.reprocess_requested_at ? `<span>rielaborazione chiesta il ${dataBreve(f.reprocess_requested_at.slice(0, 10))}</span>` : ""}
+          </div>
+          <p class="note risk">${esc(e.spiega)}</p>
+          ${f.reprocess_requested_at
+            ? `<div class="note proof">Segnato. Quando il lettore sarà pronto, questo documento rientra da solo:
+               è già nell'archivio, non devi ricaricarlo.</div>`
+            : `<div class="actions"><button class="act ghost" data-rielabora="${esc(f.id)}">Chiedi di riprovare a leggerlo</button></div>`}
+        </div>`;
+      }).join("")}
+
+      <div class="card">
+        <h3>La richiesta da mandare</h3>
+        <p class="note">Questo testo dice esattamente che cosa non si riesce a leggere.
+        Copialo e mandalo a chi cura il programma: serve a scrivere il lettore mancante.</p>
+        <textarea id="richiesta" rows="${Math.min(14, problemi.length + 4)}" readonly
+          style="width:100%;font-family:ui-monospace,monospace;font-size:0.8rem">${esc(testoRichiesta(problemi))}</textarea>
+        <div class="actions"><button class="act ghost" id="copia-richiesta">Copia la richiesta</button></div>
+      </div>
+    ` : `
+      <div class="avviso ok">
+        <strong>Nessun documento è rimasto fuori senza una ragione dichiarata.</strong>
+        Ogni file dell'archivio o è nei conti, o non doveva esserci.
+      </div>`}`;
+}
+
+function testoRichiesta(problemi) {
+  const righe = [
+    "Documenti che il programma non riesce a portare nei conti.",
+    `Archivio di ${dati.file.length} file, aggiornato al ${new Date().toISOString().slice(0, 10)}.`,
+    "",
+  ];
+  for (const f of problemi) {
+    const e = esitoDi(f);
+    righe.push(`- [${e.nome}] ${f.display_name}${f.read_note ? `  (formato: ${f.read_note})` : ""}`);
+    righe.push(`  ${e.spiega}`);
+  }
+  return righe.join("\n");
+}
+
+async function chiediRielaborazione(idFile) {
+  const f = dati.file.find((x) => x.id === idFile);
+  if (!f) return;
+  await modifica("source_file", `id=eq.${idFile}`, { reprocess_requested_at: new Date().toISOString() });
+  await traccia("document.reprocess_requested", "source_file", idFile,
+    `Chiesta la rielaborazione di «${f.display_name}» (${f.read_outcome})`);
+  f.reprocess_requested_at = new Date().toISOString();
+  disegna();
+}
+
 /* ── Situazione ─────────────────────────────────────────────────────────── */
 
 function paginaSituazione() {
   const oggiIso = oggi();
   const inRitardo = scadute();
   const nonConfermati = daConfermare();
+  const nonLetti = daGuardare();
 
   // Copertura: l'intervallo complessivo effettivamente documentato.
   const inizi = dati.copertura.map((c) => c.start_date).filter(Boolean).sort();
@@ -471,8 +596,21 @@ function paginaSituazione() {
       <a class="tile" href="#/rapporti"><div class="v">${dati.rapporti.length}</div><div class="k">rapporti individuati</div></a>
       <a class="tile" href="#/documenti"><div class="v">${dati.documenti.length}</div><div class="k">documenti in archivio</div></a>
       <a class="tile" href="#/solleciti"><div class="v">${inRitardo.length}</div><div class="k">documenti mancanti</div></a>
+      <a class="tile" href="#/letture"><div class="v">${nonLetti.length}</div><div class="k">documenti non letti</div></a>
       <a class="tile" href="#/rapporti"><div class="v">${nonConfermati.length}</div><div class="k">da confermare</div></a>
     </div>
+
+    ${nonLetti.length ? `
+      <h2>Documenti che non entrano nei conti <span class="sub">il formato è cambiato</span></h2>
+      <div class="card">
+        <p>Ci sono <strong>${nonLetti.length}</strong> document${nonLetti.length === 1 ? "o" : "i"} nell'archivio
+        che il programma non riesce a portare nei conti. Finché restano fuori, le spese e le entrate
+        di quei periodi sono <strong>più basse del vero</strong>.</p>
+        <p class="note">Succede: le banche cambiano il formato degli export senza avvisare.
+        Il programma non lo nasconde, lo dice.</p>
+        <div class="actions"><a class="tile" style="padding:0.45rem 0.85rem;border-color:var(--stop);color:var(--stop);font-weight:600;font-size:0.83rem" href="#/letture">Vedi quali sono</a></div>
+      </div>
+    ` : ""}
 
     ${dati.rapporti.length === 0 ? `
       <h2>Non c'è ancora nulla</h2>
@@ -2265,6 +2403,26 @@ async function importaAnalisi(file) {
       righeTotali += await scrivi(tabella, righe, { fondi: true, conflitto: CONFLITTI[tabella] ?? "" });
     }
 
+    // Gli esiti di lettura non sono righe nuove: aggiornano i file che ci sono
+    // gia'. Vanno applicati per gruppi, altrimenti sono centinaia di chiamate.
+    if (Array.isArray(contenuto.esiti_lettura) && contenuto.esiti_lettura.length) {
+      stato.textContent = `esiti di lettura — ${contenuto.esiti_lettura.length} documenti`;
+      const gruppi = new Map();
+      for (const e of contenuto.esiti_lettura) {
+        const k = `${e.esito}|${e.layout ?? ""}`;
+        if (!gruppi.has(k)) gruppi.set(k, []);
+        gruppi.get(k).push(e.impronta);
+      }
+      for (const [k, impronte] of gruppi) {
+        const [esito, layout] = k.split("|");
+        for (let i = 0; i < impronte.length; i += 100) {
+          const lista = impronte.slice(i, i + 100).map((h) => `"${h}"`).join(",");
+          await modifica("source_file", `content_hash=in.(${lista})`,
+            { read_outcome: esito, read_note: layout || null });
+        }
+      }
+    }
+
     barra.style.width = "100%";
     await traccia("import.snapshot", "import_batch", "analisi-iniziale", `${righeTotali} righe importate`);
     box.innerHTML = `<div class="avviso ok">Importate ${righeTotali} righe.</div>`;
@@ -2302,7 +2460,7 @@ function disegna() {
   const main = document.getElementById("pagina");
   const corpi = {
     "": paginaSituazione, rapporti: paginaRapporti, analisi: paginaAnalisi,
-    movimenti: paginaMovimenti, solleciti: paginaSolleciti,
+    movimenti: paginaMovimenti, solleciti: paginaSolleciti, letture: paginaLetture,
     documenti: paginaDocumenti, carica: paginaCarica, impostazioni: paginaImpostazioni,
   };
   main.innerHTML = p === "rapporto" ? paginaRapporto(arg) : (corpi[p] ?? paginaSituazione)();
@@ -2311,6 +2469,17 @@ function disegna() {
 }
 
 function collega(p, arg) {
+  if (p === "letture") {
+    for (const b of document.querySelectorAll("[data-rielabora]"))
+      b.onclick = () => chiediRielaborazione(b.dataset.rielabora);
+    const copia = document.getElementById("copia-richiesta");
+    if (copia) copia.onclick = async () => {
+      const t = document.getElementById("richiesta");
+      try { await navigator.clipboard.writeText(t.value); copia.textContent = "Copiata."; }
+      catch { t.select(); copia.textContent = "Selezionata: copiala con ctrl+C."; }
+    };
+  }
+
   if (p === "rapporti") {
     const aggiorna = (campo) => (e) => { filtroRap[campo] = e.target.value; disegna(); };
     document.getElementById("f-istituto").onchange = aggiorna("istituto");
