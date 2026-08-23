@@ -2506,7 +2506,17 @@ async function importaAnalisi(file) {
          a null, prima di spedirlo. */
       /* Il file omette cio' che si ricava da solo: le tre date che ripetono
          la data economica, il perimetro, la chiave di idempotenza. */
-      const grezze = (contenuto.tabelle[tabella] ?? []).map((r) => {
+      /* Una tabella può arrivare in forma compatta: l'intestazione una volta
+         sola e poi solo i valori. Serve a non spedire trentaduemila copie dei
+         nomi delle colonne. */
+      const dato = contenuto.tabelle[tabella] ?? [];
+      const elenco = Array.isArray(dato) ? dato
+        : dato.righe.map((v) => {
+            const o = { ...(dato.impliciti ?? {}) };
+            dato.colonne.forEach((c, i) => { o[c] = v[i]; });
+            return o;
+          });
+      const grezze = elenco.map((r) => {
         const x = { ...r, owner: sessione.utente.id };
         if (tabella === "ledger_transaction") {
           x.cash_date ??= x.economic_date;
