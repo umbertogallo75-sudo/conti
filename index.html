@@ -369,12 +369,21 @@ button.act:focus-visible, nav.tabs a:focus-visible, .tile:focus-visible, input:f
 .note { border-left:3px solid var(--border); padding:0.15rem 0 0.15rem 0.7rem; margin-top:0.55rem; color:var(--muted); font-size:0.83rem; }
 .note.proof{border-left-color:var(--ok)} .note.risk{border-left-color:var(--warn)} .note.stop{border-left-color:var(--stop)}
 
-input[type=email],input[type=password],input[type=text],select {
+/* Vale per ogni campo di testo, non per l'elenco di quelli a cui si era
+   pensato. Gli input scritti senza «type» — che per il browser sono di testo
+   lo stesso — restavano larghi due centimetri in mezzo a un pannello largo
+   venti: il campo «Categoria» del dettaglio di un movimento era uno di quelli. */
+input:not([type=checkbox]):not([type=radio]):not([type=file]), select, textarea {
   font:inherit; width:100%; padding:0.6rem 0.7rem; border-radius:8px;
   border:1px solid var(--border); background:var(--surface); color:var(--text);
 }
-label.campo { display:block; margin-bottom:0.7rem; font-size:0.84rem; color:var(--muted); }
-label.campo span { display:block; margin-bottom:0.2rem; }
+label.campo { display:block; margin-bottom:0.9rem; font-size:0.84rem; color:var(--muted); }
+label.campo > span { display:block; margin-bottom:0.25rem; color:var(--text); font-weight:600; }
+/* Il tipo del conto è un'informazione di servizio: sta accanto al nome, non
+   sotto, e non ha lo stesso peso. Andando a capo con lo stesso carattere
+   sembravano due righe di elenco invece di una cosa sola. */
+label.campo > span .sub { display:inline; font-weight:400; color:var(--muted); margin-left:0.4rem; }
+.card > p + label.campo { margin-top:1rem; }
 
 #zona {
   border:2px dashed var(--border); border-radius:var(--radius); padding:2rem 1rem;
@@ -596,7 +605,7 @@ table.dati td.num { text-align:right; }
 
 /* La versione del programma. Serve a una cosa sola: accorgersi che quella
    pubblicata è più nuova di quella aperta. Va alzata a ogni pubblicazione. */
-const VERSIONE = 8;
+const VERSIONE = 9;
 
 const BASE = "https://dvkkxqfcxeebqlmtryxi.supabase.co";
 const ANON = "sb_publishable_PIvO1WmssAHUXXwy6nmz_w_W_tPxtNG";
