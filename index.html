@@ -2504,7 +2504,19 @@ async function importaAnalisi(file) {
       /* PostgREST rifiuta un lotto in cui le righe non hanno tutte gli stessi
          campi. Il file omette i campi vuoti per non pesare: qui si rimettono,
          a null, prima di spedirlo. */
-      const grezze = (contenuto.tabelle[tabella] ?? []).map((r) => ({ ...r, owner: sessione.utente.id }));
+      /* Il file omette cio' che si ricava da solo: le tre date che ripetono
+         la data economica, il perimetro, la chiave di idempotenza. */
+      const grezze = (contenuto.tabelle[tabella] ?? []).map((r) => {
+        const x = { ...r, owner: sessione.utente.id };
+        if (tabella === "ledger_transaction") {
+          x.cash_date ??= x.economic_date;
+          x.booking_date ??= x.economic_date;
+          x.value_date ??= x.economic_date;
+          x.perimeter ??= "verified";
+          x.idempotency_key ??= x.id;
+        }
+        return x;
+      });
       const chiavi = new Set();
       for (const r of grezze) for (const k of Object.keys(r)) chiavi.add(k);
       const righe = grezze.map((r) => {
