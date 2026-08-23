@@ -403,6 +403,24 @@ table.dati td.num { text-align:right; }
    pagina, ma non si allunga con lei. Senza, su uno schermo largo diventava
    alto tre volte lo schermo. */
 .grafico { position:relative; }
+/* ── Estratti da recuperare ───────────────────────────────────────────────
+   Pensata prima per il telefono: su schermo stretto il periodo va a capo per
+   conto suo e l'importo resta allineato a destra, senza mai far scorrere la
+   pagina in orizzontale. */
+.recupero .capo-recupero { display:flex; align-items:baseline; justify-content:space-between; gap:0.6rem; flex-wrap:wrap; }
+.recupero .capo-recupero h3 { margin:0; font-size:1rem; }
+.recupero .capo-recupero .quanto { font-variant-numeric:tabular-nums; font-weight:700; color:var(--stop); white-space:nowrap; }
+.recupero .sub-recupero { margin:0.15rem 0 0.6rem; font-size:0.8rem; color:var(--muted); }
+.recupero ul.periodi { list-style:none; margin:0; padding:0; }
+.recupero ul.periodi li {
+  display:grid; grid-template-columns:1fr auto; gap:0.1rem 0.7rem;
+  padding:0.5rem 0; border-top:1px solid var(--border); align-items:baseline;
+}
+.recupero ul.periodi li:first-child { border-top:0; }
+.recupero .quando { font-weight:600; }
+.recupero .quanti { grid-column:1; font-size:0.78rem; color:var(--muted); }
+.recupero .soldi { grid-column:2; grid-row:1 / span 2; font-variant-numeric:tabular-nums; white-space:nowrap; align-self:center; }
+.recupero .dove { margin-top:0.7rem; padding-top:0.6rem; border-top:1px dashed var(--border); }
 .istogramma { width:100%; height:190px; display:block; }
 @media (max-width:600px) { .istogramma { height:150px; } }
 .istogramma .asse { stroke:var(--border); stroke-width:1; vector-effect:non-scaling-stroke; }
@@ -722,12 +740,12 @@ const FIDUCIA = {
 const dati = {
   rapporti: [], identificativi: [], strumenti: [], documenti: [],
   file: [], copertura: [], attese: [], legami: [], sconosciuti: [],
-  conti: [], movimenti: [], scritture: [], nessi: [], note: [],
+  conti: [], movimenti: [], scritture: [], nessi: [], note: [], mancanti: [],
 };
 
 async function ricarica() {
   const [rapporti, identificativi, strumenti, documenti, file, copertura, attese, legami, sconosciuti,
-         conti, movimenti, scritture, nessi, note, controparti] =
+         conti, movimenti, scritture, nessi, note, controparti, mancanti] =
     await Promise.all([
       leggi("relationship", "select=*&order=institution_label,display_name"),
       leggi("relationship_identifier", "select=*"),
@@ -744,9 +762,10 @@ async function ricarica() {
       leggi("transaction_link", "select=*"),
       leggi("transaction_annotation", "select=*"),
       leggi("controparte", "select=*"),
+      leggi("periodo_mancante", "select=*&order=rapporto,dal"),
     ]);
   Object.assign(dati, { rapporti, identificativi, strumenti, documenti, file, copertura, attese, legami, sconosciuti,
-    conti, movimenti, scritture, nessi, note, controparti });
+    conti, movimenti, scritture, nessi, note, controparti, mancanti });
   indice.perControparte = new Map(controparti.map((c) => [c.chiave, c]));
 
   // Indici: con qualche migliaio di movimenti, cercare ogni volta a scansione
@@ -888,6 +907,77 @@ const esitoDi = (f) => ESITO[f.read_outcome] ?? ESITO.null;
 const daGuardare = () => dati.file.filter((f) => esitoDi(f).guarda && !f.archived_at);
 const archiviati = () => dati.file.filter((f) => f.archived_at);
 
+/* ── Gli estratti che mancano davvero ──────────────────────────────────────
+   Diverso dai «mesi scoperti» qui sopra, che guardano se un conto ha
+   movimenti in ogni mese. Questi sono i periodi in cui il conto corrente ha
+   PAGATO una carta — o ha ricaricato PayPal — e non esiste nessun documento
+   che dica in che cosa quel denaro sia stato speso.
+
+   Non è una stima: ogni riga nasce da un pagamento vero, con la sua data e il
+   suo importo, che nessun estratto della carta conferma. È la lista della
+   spesa da portare in banca.
+
+   Finché il documento non arriva, quel denaro non viene buttato via: resta
+   fra le spese, in una categoria che dice la verità su se stessa. Il giorno
+   che l'estratto arriva, le righe vere prendono il posto del totale e la
+   categoria si svuota da sola. */
+function daRecuperare() {
+  const per = new Map();
+  for (const m of dati.mancanti) {
+    if (!per.has(m.rapporto)) per.set(m.rapporto, []);
+    per.get(m.rapporto).push(m);
+  }
+  return [...per.entries()]
+    .map(([rapporto, righe]) => ({
+      rapporto,
+      righe: righe.slice().sort((a, b) => a.dal.localeCompare(b.dal)),
+      totale: righe.reduce((t, r) => t + BigInt(r.importo_minor), 0n),
+      mesi: righe.reduce((t, r) => t + mesiFra(r.dal, r.al), 0),
+      dove: righe.find((r) => r.dove)?.dove ?? null,
+    }))
+    .sort((a, b) => (a.totale < b.totale ? 1 : -1));
+}
+
+const mesiFra = (dal, al) => {
+  const [a1, m1] = dal.split("-").map(Number), [a2, m2] = al.split("-").map(Number);
+  return (a2 - a1) * 12 + (m2 - m1) + 1;
+};
+
+function sezioneDaRecuperare() {
+  const gruppi = daRecuperare();
+  if (!gruppi.length) return "";
+  const totale = gruppi.reduce((t, g) => t + g.totale, 0n);
+  const mesi = gruppi.reduce((t, g) => t + g.mesi, 0);
+
+  return `
+    ${sezione("Estratti da recuperare", `${mesi} mesi · ${formattaCentesimi(totale, "EUR")}`)}
+    <div class="card">
+      <p class="note">Qui il conto ha pagato una carta, o ha ricaricato PayPal, e non c'è
+      nessun documento che dica in che cosa quel denaro sia stato speso. Non è una stima:
+      ogni periodo nasce da pagamenti veri, con la loro data e il loro importo. Quando uno di
+      questi estratti arriva e lo carichi, le righe vere prendono il posto del totale e il
+      periodo sparisce da questa lista.</p>
+    </div>
+    ${gruppi.map((g) => `
+      <div class="card recupero">
+        <div class="capo-recupero">
+          <h3>${esc(g.rapporto)}</h3>
+          <span class="quanto">${formattaCentesimi(g.totale, "EUR")}</span>
+        </div>
+        <p class="sub-recupero">${g.righe.length} period${g.righe.length === 1 ? "o" : "i"} ·
+          ${g.mesi} mes${g.mesi === 1 ? "e" : "i"}</p>
+        <ul class="periodi">
+          ${g.righe.map((r) => `<li>
+            <span class="quando">${esc(r.nota ?? `${r.dal} → ${r.al}`)}</span>
+            <span class="quanti">${r.pagamenti} pagament${r.pagamenti === 1 ? "o" : "i"}</span>
+            <span class="soldi">${formattaCentesimi(BigInt(r.importo_minor), "EUR")}</span>
+          </li>`).join("")}
+        </ul>
+        ${g.dove ? `<p class="note dove">${esc(g.dove)}</p>` : ""}
+      </div>`).join("")}
+  `;
+}
+
 function paginaLetture() {
   const buchi = periodiMancanti();
   const problemi = daGuardare();
@@ -925,6 +1015,8 @@ function paginaLetture() {
         .sort((a, b) => b[1] - a[1])
         .map(([k, n]) => `<span>${esc((ESITO[k] ?? ESITO.null).nome)} <strong>${n}</strong></span>`).join("")}</div>
     </div>
+
+    ${sezioneDaRecuperare()}
 
     ${problemi.length ? `
       <div class="avviso ${problemi.some((f) => esitoDi(f).badge === "err") ? "err" : "warn"}">
@@ -1328,6 +1420,9 @@ function paginaSituazione() {
           <b>${nonLetti.length}</b> document${nonLetti.length === 1 ? "o non è entrato" : "i non sono entrati"} nei conti</a>` : ""}
         ${buchi.length ? `<a class="allerta warn" href="#/letture">
           <b>${buchi.length}</b> rapport${buchi.length === 1 ? "o ha" : "i hanno"} mesi senza documenti</a>` : ""}
+        ${daRecuperare().length ? `<a class="allerta warn" href="#/letture">
+          <b>${daRecuperare().reduce((t, g) => t + g.mesi, 0)}</b> mesi di estratti da recuperare —
+          ${formattaCentesimi(daRecuperare().reduce((t, g) => t + g.totale, 0n), "EUR")} di spesa senza dettaglio</a>` : ""}
         ${inRitardo.length ? `<a class="allerta warn" href="#/solleciti">
           <b>${inRitardo.length}</b> document${inRitardo.length === 1 ? "o" : "i"} in ritardo</a>` : ""}
         ${nonConfermati.length ? `<a class="allerta" href="#/rapporti">
@@ -3791,7 +3886,22 @@ async function importaAnalisi(file) {
                         transaction_link: "owner,from_id,to_id,kind",
                         /* Una controparte è identificata dalla sua chiave: ricaricare
                            lo stesso file aggiorna la riga, non ne crea una seconda. */
-                        controparte: "owner,chiave" };
+                        controparte: "owner,chiave",
+                        periodo_mancante: "owner,rapporto,dal,al" };
+
+    /* ── Prima svuotare, poi scrivere ─────────────────────────────────────
+       L'upsert non cancella. Se una riga viene letta meglio di prima — lo
+       stesso estratto in CSV invece che in PDF — il suo identificativo
+       cambia, e la vecchia riga resta nel database senza che niente lo
+       segnali: i totali crescono da soli. Le tabelle che il file dichiara di
+       sostituire si svuotano qui, nell'ordine dato (inverso alle dipendenze),
+       e vengono riscritte per intero subito dopo. */
+    if (Array.isArray(contenuto.sostituisci)) {
+      for (const t of contenuto.sostituisci) {
+        stato.textContent = `svuoto ${t}…`;
+        await cancella(t, `owner=eq.${sessione.utente.id}`);
+      }
+    }
     const totale = contenuto.ordine.length;
     let righeTotali = 0;
 
