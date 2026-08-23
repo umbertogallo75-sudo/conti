@@ -51,15 +51,16 @@ header.top .riga { display:flex; align-items:baseline; gap:0.6rem; max-width:860
 header.top h1 { margin:0; font-size:1.05rem; letter-spacing:-0.01em; flex:1; }
 header.top p { margin:0.15rem auto 0; max-width:860px; opacity:0.82; font-size:0.82rem; }
 header.top .act.ghost { color:var(--su-brand); border-color:rgba(255,255,255,0.45); }
+/* Le linguette vanno a capo, non di lato. Una barra che scorre in orizzontale
+   nasconde metà delle voci, e una voce che bisogna cercare scorrendo è una
+   voce che non si trova: si vedono tutte, anche se prendono due righe. */
 nav.tabs {
-  display:flex; gap:0.3rem; overflow-x:auto; margin:0.7rem auto 0; max-width:860px;
-  padding-bottom:0.1rem; scrollbar-width:none;
+  display:flex; flex-wrap:wrap; gap:0.3rem; margin:0.7rem auto 0; max-width:860px;
 }
-nav.tabs::-webkit-scrollbar { display:none; }
 nav.tabs a {
-  flex:0 0 auto; text-decoration:none; color:var(--su-brand); padding:0.4rem 0.8rem;
+  flex:0 0 auto; text-decoration:none; color:var(--su-brand); padding:0.34rem 0.7rem;
   border-radius:999px; border:1px solid rgba(255,255,255,0.28); background:rgba(255,255,255,0.1);
-  font-size:0.86rem; white-space:nowrap;
+  font-size:0.84rem; white-space:nowrap;
 }
 nav.tabs a[aria-current="page"] { background:var(--su-brand); border-color:var(--su-brand); color:var(--brand); font-weight:600; }
 nav.tabs a .n {
@@ -67,6 +68,26 @@ nav.tabs a .n {
   background:rgba(255,255,255,0.2); font-size:0.76rem; font-variant-numeric:tabular-nums;
 }
 nav.tabs a[aria-current="page"] .n { background:var(--brand-chiaro); color:var(--brand); }
+
+/* Le sezioni dentro «Documenti». Stanno nella pagina, non nella banda verde:
+   sono un livello sotto, e si deve vedere che lo sono. */
+nav.sezioni {
+  display:flex; flex-wrap:wrap; gap:0.35rem; margin:0 0 1rem;
+  padding:0.28rem; background:var(--surface-2); border-radius:999px;
+}
+nav.sezioni a {
+  flex:1 1 auto; text-align:center; text-decoration:none; color:var(--muted);
+  padding:0.42rem 0.7rem; border-radius:999px; font-size:0.86rem; font-weight:600;
+  white-space:nowrap;
+}
+nav.sezioni a[aria-current="page"] {
+  background:var(--surface); color:var(--brand); box-shadow:var(--ombra);
+}
+nav.sezioni a .n {
+  display:inline-block; margin-left:0.35rem; padding:0 0.34rem; border-radius:999px;
+  background:var(--brand-chiaro); color:var(--brand); font-size:0.75rem;
+  font-variant-numeric:tabular-nums;
+}
 
 /* Al buio la banda verde piena è una lampada: di notte si guarda il telefono
    a letto. La banda diventa scura, e il verde resta dov'è utile — la scheda
@@ -172,6 +193,7 @@ details.tendina .voce input { width:1rem; height:1rem; flex:0 0 auto; }
 .riga-mov { border-bottom:1px solid var(--border); background:var(--carta, #fff); }
 .riga-mov:first-of-type { border-top:1px solid var(--border); }
 .riga-mov.aperta { background:var(--riga, rgba(0,0,0,0.02)); }
+.dettaglio-mov { margin:0 0.9rem 0.8rem; border-top:1px solid var(--border); padding-top:0.7rem; }
 .riga-mov.provvisoria .testa { background:repeating-linear-gradient(135deg,
   transparent, transparent 8px, rgba(0,0,0,0.02) 8px, rgba(0,0,0,0.02) 16px); }
 .riga-mov .testa {
@@ -223,14 +245,38 @@ details.tendina .voce input { width:1rem; height:1rem; flex:0 0 auto; }
 }
 .riga-mov .freccia { color:var(--muted); display:none; }
 @media (min-width: 760px) { .riga-mov .freccia { display:inline; } .riga-mov .istituto { display:block; } }
-@media (max-width: 759px) { .riga-mov .istituto, .riga-mov .genere > span:last-child { display:none; } }
+/* ── La riga sul telefono ───────────────────────────────────────────────────
+   Tre colonne e basta: quando, che cosa, quanto. Prima erano cinque, e le due
+   che non ci stavano andavano a capo — l'importo finiva su una riga tutta sua,
+   allineato a sinistra, staccato da quello a cui si riferisce. Per leggere
+   quanto era costata una cosa bisognava scendere di una riga e tornare
+   indietro con l'occhio.
+
+   L'importo è la seconda cosa che si cerca dopo il nome: sta sulla stessa
+   riga, a destra, incolonnato con quello di sopra e di sotto. Il resto —
+   l'icona del tipo, il nome della banca — vive sullo schermo grande, dove c'è
+   spazio, e qui sotto si trova aprendo il movimento. */
+@media (max-width: 759px) {
+  .riga-mov .testa { grid-template-columns:2.6rem minmax(0,1fr) auto; }
+  .riga-mov .istituto, .riga-mov .genere { display:none; }
+  .riga-mov .quanto { justify-self:end; }
+  .riga-mov .che-cosa strong {
+    font-size:0.95rem; line-height:1.25;
+    /* Due righe bastano a riconoscere una spesa. Alla terza la riga diventa
+       un paragrafo e l'elenco smette di essere un elenco. */
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+  }
+  .riga-mov .quanto b { font-size:1.02rem; }
+}
 .annota .suddivisione { margin-top:0.8rem; border-top:1px solid var(--border); padding-top:0.7rem; }
 .annota .parte { display:flex; gap:0.4rem; margin-bottom:0.35rem; }
 .annota .parte .p-importo { flex:0 0 8rem; }
 .annota .parte .p-categoria { flex:1; min-width:0; }
 
 /* ── La prima pagina ────────────────────────────────────────────────────── */
-.banche { display:flex; gap:0.4rem; overflow-x:auto; padding-bottom:0.3rem; margin-bottom:0.8rem; }
+/* Anche qui: a capo, non di lato. Una banca nascosta oltre il bordo è una
+   banca che non esiste per chi guarda. */
+.banche { display:flex; flex-wrap:wrap; gap:0.4rem; margin-bottom:0.9rem; }
 .banche .scheda {
   font:inherit; font-size:0.82rem; font-weight:600; white-space:nowrap; cursor:pointer;
   padding:0.4rem 0.9rem; border-radius:999px; border:1px solid var(--border);
@@ -378,7 +424,9 @@ table.dati td.num { text-align:right; }
 .delta.buono.su { color:var(--ok); border-color:var(--ok); }
 .delta.buono.giu { color:var(--stop); border-color:var(--stop); }
 
-.pillole { display:flex; gap:0.35rem; overflow-x:auto; padding-bottom:0.25rem; scrollbar-width:none; }
+/* I periodi vanno a capo come tutto il resto: scorrere di lato per trovare
+   «Quest'anno» significa non trovarlo. */
+.pillole { display:flex; flex-wrap:wrap; gap:0.35rem; }
 .pillole::-webkit-scrollbar { display:none; }
 .pillole button {
   font:inherit; font-size:0.82rem; white-space:nowrap; cursor:pointer; flex:0 0 auto;
@@ -533,7 +581,7 @@ table.dati td.num { text-align:right; }
 
 /* La versione del programma. Serve a una cosa sola: accorgersi che quella
    pubblicata è più nuova di quella aperta. Va alzata a ogni pubblicazione. */
-const VERSIONE = 6;
+const VERSIONE = 7;
 
 const BASE = "https://dvkkxqfcxeebqlmtryxi.supabase.co";
 const ANON = "sb_publishable_PIvO1WmssAHUXXwy6nmz_w_W_tPxtNG";
@@ -815,16 +863,31 @@ const daConfermare = () => dati.rapporti.filter((r) => r.confirmation === "propo
    PAGINE
    ═══════════════════════════════════════════════════════════════════════════ */
 
+/* ── Sei voci, non nove ─────────────────────────────────────────────────────
+   Nove linguette sul telefono non ci stanno: scorrono di lato, e una voce che
+   bisogna cercare scorrendo è una voce che non si trova. Quattro parlavano
+   tutte della stessa cosa — i documenti: quelli in archivio, quelli letti
+   male, quelli che mancano, e il posto dove caricarne di nuovi. Sono diventate
+   quattro sezioni dentro una voce sola. */
 const PAGINE = [
-  { id: "",           nome: "Situazione", conta: () => null },
-  { id: "rapporti",   nome: "Rapporti",   conta: () => dati.rapporti.length },
-  { id: "analisi",    nome: "Analisi",    conta: () => null },
-  { id: "movimenti",  nome: "Movimenti",  conta: () => dati.movimenti.length || null },
-  { id: "solleciti",  nome: "Solleciti",  conta: () => scadute().length },
-  { id: "letture",    nome: "Letture",    conta: () => daGuardare().length || null },
-  { id: "documenti",  nome: "Documenti",  conta: () => dati.documenti.length },
-  { id: "carica",     nome: "Carica",     conta: () => null },
+  { id: "",           nome: "Situazione",   conta: () => null },
+  { id: "rapporti",   nome: "Rapporti",     conta: () => null },
+  { id: "movimenti",  nome: "Movimenti",    conta: () => null },
+  { id: "analisi",    nome: "Analisi",      conta: () => null },
+  /* Il numero resta solo dove è un avviso. «Movimenti 2386» dice quante righe
+     ci sono, che non serve a niente e ruba mezza riga di menù; «Documenti 3»
+     dice che tre cose aspettano te. */
+  { id: "documenti",  nome: "Documenti",    conta: () => daGuardare().length + scadute().length || null },
   { id: "impostazioni", nome: "Impostazioni", conta: () => null },
+];
+
+/* Le quattro sezioni della voce «Documenti». La prima è quella che si apre
+   entrando: l'archivio di quello che c'è. */
+const SEZIONI_DOC = [
+  { id: "",          nome: "Archivio",  conta: () => dati.documenti.length },
+  { id: "letture",   nome: "Letture",   conta: () => daGuardare().length || null },
+  { id: "solleciti", nome: "Mancanti",  conta: () => scadute().length || null },
+  { id: "carica",    nome: "Carica",    conta: () => null },
 ];
 
 function disegnaTabs(attiva) {
@@ -1264,8 +1327,12 @@ let bancaAperta = "";
 
 /* Ogni conto il suo colore: la ciambella e l'elenco devono dire la stessa cosa
    nello stesso ordine, altrimenti il disegno è decorazione e non informazione. */
-const COLORI = ["#2563eb", "#16a34a", "#f59e0b", "#db2777", "#0891b2", "#7c3aed",
-                "#dc2626", "#65a30d", "#0284c7", "#c026d3", "#ea580c", "#059669"];
+/* Il primo colore è il verde della banca. La fetta più grossa è quasi sempre
+   il conto principale, e vederla del colore dell'app invece che di un blu
+   qualunque fa sembrare la pagina una cosa sola. Gli altri restano ben
+   distinti fra loro: servono a dire «questo non è quello», non a decorare. */
+const COLORI = ["#00714a", "#2563eb", "#e08700", "#7c3aed", "#0891b2", "#db2777",
+                "#65a30d", "#dc2626", "#0284c7", "#c026d3", "#ea580c", "#0d9488"];
 
 /** Una ciambella disegnata a mano: nessuna libreria, nessuna richiesta di rete. */
 function ciambella(fette, totale) {
@@ -2670,7 +2737,25 @@ const TIPI = {
 
 let filtroDoc = { istituto: "", tipo: "" };
 
-function paginaDocumenti() {
+/* La voce «Documenti» tiene quattro sezioni. La barra qui sopra dice quali
+   sono e quante cose ci sono dentro: si vedono tutte insieme, senza scorrere. */
+function paginaDocumenti(sotto = "") {
+  const corpi = { "": paginaArchivio, letture: paginaLetture,
+                  solleciti: paginaSolleciti, carica: paginaCarica };
+  const corpo = corpi[sotto] ?? paginaArchivio;
+  return `
+    <nav class="sezioni">
+      ${SEZIONI_DOC.map((x) => {
+        const n = x.conta();
+        return `<a href="#/documenti${x.id ? `/${x.id}` : ""}"${
+          x.id === sotto ? ' aria-current="page"' : ""}>${esc(x.nome)}${
+          n ? `<span class="n">${n}</span>` : ""}</a>`;
+      }).join("")}
+    </nav>
+    ${corpo()}`;
+}
+
+function paginaArchivio() {
   if (!dati.documenti.length) return vuoto("Nessun documento in archivio.");
 
   const istituti = [...new Set(dati.documenti.map((d) => d.institution_key).filter(Boolean))].sort();
@@ -3260,7 +3345,7 @@ function dettaglioMovimento(m) {
   }).join("");
 
   return `
-    <div style="margin-top:0.7rem;border-top:1px solid var(--border);padding-top:0.7rem">
+    <div class="dettaglio-mov">
       <div class="scorri"><table class="dati">
         <thead><tr><th>Conto</th><th>Tipo</th><th class="num">Importo</th></tr></thead>
         <tbody>${s.map((x) => {
@@ -4089,19 +4174,113 @@ async function esci() {
 const percorso = () => location.hash.replace(/^#\/?/, "").split("/");
 const pagina = () => percorso()[0] || "";
 
+/* Le annotazioni si agganciano anche a un pezzo di pagina appena inserito:
+   aprire un movimento non ridisegna più tutta la pagina, e il pannello nuovo
+   va collegato da solo. */
+function collegaAnnotazioni(radice = document) {
+  for (const box of radice.querySelectorAll(".annota")) {
+    box.addEventListener("click", (e) => e.stopPropagation());
+    const parti = box.querySelector(".parti");
+    const resto = box.querySelector(".a-resto");
+    const totale = (() => { const v = importoMov(box.dataset.annota); return v < 0n ? -v : v; })();
+    function aggiornaResto() {
+      const somma = [...box.querySelectorAll(".p-importo")]
+        .reduce((s, i) => s + Math.round(Number(i.value || 0) * 100), 0);
+      resto.textContent = somma === 0 ? ""
+        : BigInt(somma) === totale ? "Le parti fanno il totale."
+        : `Mancano ${formattaCentesimi(totale - BigInt(somma))}`;
+    }
+    box.querySelector(".a-aggiungi").onclick = () => {
+      const d = document.createElement("div");
+      d.className = "parte";
+      d.innerHTML = `<input type="number" class="p-importo" step="0.01" placeholder="importo">
+        <input list="cat-note" class="p-categoria" placeholder="categoria">
+        <button class="act ghost p-togli" title="togli questa riga">−</button>`;
+      parti.appendChild(d);
+      d.querySelector(".p-importo").focus();
+    };
+    parti.addEventListener("click", (e) => {
+      if (!e.target.classList.contains("p-togli")) return;
+      e.preventDefault();
+      e.target.closest(".parte").remove();
+      aggiornaResto();
+    });
+    parti.addEventListener("input", aggiornaResto);
+    aggiornaResto();
+    box.querySelector(".a-salva").onclick = () => salvaAnnotazione(box);
+    const via = box.querySelector(".a-cancella");
+    if (via) via.onclick = () => togliAnnotazione(box);
+  }
+}
+
+/* ── Aprire un movimento non ridisegna la pagina ────────────────────────────
+   Prima sì, e si vedeva: ridisegnare voleva dire ricostruire duemila righe e
+   rimettere lo scorrimento in cima, così la riga che si stava guardando finiva
+   chissà dove e una scrollata automatica cercava di riportarcela. Da fuori
+   sembrava che la pagina saltasse in fondo e poi risalisse.
+
+   Il dettaglio si apre dove sta. Niente ridisegno, niente scorrimento: la riga
+   resta esattamente sotto il dito che l'ha toccata. */
+function apriMovimento(scheda) {
+  const id = scheda.dataset.movimento;
+  /* Quanto dista la riga dal bordo alto dello schermo. È questo che deve
+     restare uguale: se cambia, la riga si è mossa sotto il dito. Aprire e
+     chiudere modifica l'altezza della pagina, e il browser a volte ne
+     approfitta per aggiustare lo scorrimento di qualche pixel. */
+  const primaDaSopra = scheda.getBoundingClientRect().top;
+  const chiudi = (nodo) => {
+    if (!nodo) return;
+    nodo.classList.remove("aperta");
+    nodo.querySelector(".dettaglio-mov")?.remove();
+    const f = nodo.querySelector(".freccia");
+    if (f) f.textContent = "▾";
+  };
+
+  if (apertoMov && apertoMov !== id)
+    chiudi(document.querySelector(`[data-movimento="${CSS.escape(apertoMov)}"]`));
+
+  const rimetti = () => {
+    const spostata = scheda.getBoundingClientRect().top - primaDaSopra;
+    if (Math.abs(spostata) > 0.5) window.scrollBy(0, spostata);
+  };
+
+  if (apertoMov === id) { apertoMov = null; chiudi(scheda); rimetti(); return; }
+
+  const m = indice.perTransazione.get(id);
+  if (!m) return;
+  apertoMov = id;
+  scheda.classList.add("aperta");
+  scheda.insertAdjacentHTML("beforeend", dettaglioMovimento(m));
+  const f = scheda.querySelector(".freccia");
+  if (f) f.textContent = "▴";
+  collegaAnnotazioni(scheda);
+  rimetti();
+}
+
+/* Gli indirizzi vecchi continuano a funzionare: un collegamento salvato o un
+   segnalibro non deve smettere di aprire la pagina giusta perché il menù è
+   cambiato. Portano dove la sezione è finita. */
+const TRASLOCHI = { letture: "documenti/letture", solleciti: "documenti/solleciti",
+                    carica: "documenti/carica" };
+
 function disegna() {
   const [p, arg] = percorso();
+  if (TRASLOCHI[p]) { location.hash = `#/${TRASLOCHI[p]}`; return; }
+
   // La scheda di dettaglio resta sotto la linguetta «Rapporti».
   disegnaTabs(p === "rapporto" ? "rapporti" : (p || ""));
   const main = document.getElementById("pagina");
   const corpi = {
     "": paginaSituazione, rapporti: paginaRapporti, analisi: paginaAnalisi,
-    movimenti: paginaMovimenti, solleciti: paginaSolleciti, letture: paginaLetture,
-    documenti: paginaDocumenti, carica: paginaCarica, impostazioni: paginaImpostazioni,
+    movimenti: paginaMovimenti, documenti: paginaDocumenti, impostazioni: paginaImpostazioni,
   };
-  main.innerHTML = p === "rapporto" ? paginaRapporto(arg) : (corpi[p] ?? paginaSituazione)();
+  main.innerHTML = p === "rapporto" ? paginaRapporto(arg)
+    : p === "documenti" ? paginaDocumenti(arg ?? "")
+    : (corpi[p] ?? paginaSituazione)();
   window.scrollTo(0, 0);
-  collega(p, arg);
+  /* Gli agganci delle sezioni di «Documenti» sono quelli che avevano quando
+     erano pagine a sé: si passa il nome della sezione, non della voce. */
+  collega(p === "documenti" ? (arg || "documenti") : p, arg);
 }
 
 function collega(p, arg) {
@@ -4145,39 +4324,7 @@ function collega(p, arg) {
     };
   }
 
-  for (const box of document.querySelectorAll(".annota")) {
-    box.addEventListener("click", (e) => e.stopPropagation());
-    const parti = box.querySelector(".parti");
-    const resto = box.querySelector(".a-resto");
-    const totale = (() => { const v = importoMov(box.dataset.annota); return v < 0n ? -v : v; })();
-    function aggiornaResto() {
-      const somma = [...box.querySelectorAll(".p-importo")]
-        .reduce((s, i) => s + Math.round(Number(i.value || 0) * 100), 0);
-      resto.textContent = somma === 0 ? ""
-        : BigInt(somma) === totale ? "Le parti fanno il totale."
-        : `Mancano ${formattaCentesimi(totale - BigInt(somma))}`;
-    }
-    box.querySelector(".a-aggiungi").onclick = () => {
-      const d = document.createElement("div");
-      d.className = "parte";
-      d.innerHTML = `<input type="number" class="p-importo" step="0.01" placeholder="importo">
-        <input list="cat-note" class="p-categoria" placeholder="categoria">
-        <button class="act ghost p-togli" title="togli questa riga">−</button>`;
-      parti.appendChild(d);
-      d.querySelector(".p-importo").focus();
-    };
-    parti.addEventListener("click", (e) => {
-      if (!e.target.classList.contains("p-togli")) return;
-      e.preventDefault();
-      e.target.closest(".parte").remove();
-      aggiornaResto();
-    });
-    parti.addEventListener("input", aggiornaResto);
-    aggiornaResto();
-    box.querySelector(".a-salva").onclick = () => salvaAnnotazione(box);
-    const via = box.querySelector(".a-cancella");
-    if (via) via.onclick = () => togliAnnotazione(box);
-  }
+  collegaAnnotazioni();
 
   if (p === "letture") {
     for (const b of document.querySelectorAll("[data-rielabora]"))
@@ -4200,12 +4347,16 @@ function collega(p, arg) {
 
   if (p === "rapporti") {
     const aggiorna = (campo) => (e) => { filtroRap[campo] = e.target.value; disegna(); };
-    document.getElementById("f-istituto").onchange = aggiorna("istituto");
-    document.getElementById("f-genere").onchange = aggiorna("genere");
-    document.getElementById("f-stato").onchange = aggiorna("stato");
+    /* I filtri esistono solo se c'è qualcosa da filtrare: senza rapporti la
+       pagina è un messaggio, e cercare i menù a tendina fermava tutto il
+       resto dell'aggancio con un errore in console. */
+    for (const [id, campo] of [["f-istituto", "istituto"], ["f-genere", "genere"], ["f-stato", "stato"]]) {
+      const sel = document.getElementById(id);
+      if (sel) sel.onchange = aggiorna(campo);
+    }
     const cerca = document.getElementById("f-cerca");
     let attesa;
-    cerca.oninput = (e) => {
+    if (cerca) cerca.oninput = (e) => {
       clearTimeout(attesa);
       const v = e.target.value;
       attesa = setTimeout(() => {
@@ -4220,6 +4371,7 @@ function collega(p, arg) {
   if (p === "carica") {
     const zona = document.getElementById("zona");
     const input = document.getElementById("input-file");
+    if (!zona || !input) return;
     document.getElementById("scegli").onclick = () => input.click();
     input.onchange = () => caricaFile(input.files);
     for (const ev of ["dragenter", "dragover"])
@@ -4230,7 +4382,8 @@ function collega(p, arg) {
 
     const bottone = document.getElementById("scegli-cartella");
     const stato = document.getElementById("stato-cartella");
-    if (!window.showDirectoryPicker) {
+    if (!bottone || !stato) { /* la sezione non è a schermo */ }
+    else if (!window.showDirectoryPicker) {
       bottone.disabled = true;
       stato.textContent = "Questo browser non sa scrivere in una cartella del computer. Su Chrome o Edge da computer funziona.";
     } else {
@@ -4302,8 +4455,11 @@ function collega(p, arg) {
   }
 
   if (p === "documenti") {
-    document.getElementById("filtro-istituto").onchange = (e) => { filtroDoc.istituto = e.target.value; disegna(); };
-    document.getElementById("filtro-tipo").onchange = (e) => { filtroDoc.tipo = e.target.value; disegna(); };
+    /* Senza documenti la pagina è un messaggio e i filtri non ci sono. */
+    for (const [id, campo] of [["filtro-istituto", "istituto"], ["filtro-tipo", "tipo"]]) {
+      const sel = document.getElementById(id);
+      if (sel) sel.onchange = (e) => { filtroDoc[campo] = e.target.value; disegna(); };
+    }
   }
 
   if (p === "impostazioni") {
@@ -4344,13 +4500,7 @@ function collega(p, arg) {
     }
 
     const scheda = e.target.closest("[data-movimento]");
-    if (scheda && !e.target.closest("button")) {
-      apertoMov = apertoMov === scheda.dataset.movimento ? null : scheda.dataset.movimento;
-      disegna();
-      if (apertoMov) document.querySelector(`[data-movimento="${apertoMov}"]`)
-        ?.scrollIntoView({ block: "center", behavior: "smooth" });
-      return;
-    }
+    if (scheda && !e.target.closest("button")) { apriMovimento(scheda); return; }
 
     const b = e.target.closest("button");
     if (!b) return;
