@@ -421,6 +421,18 @@ table.dati td.num { text-align:right; }
 .recupero .quanti { grid-column:1; font-size:0.78rem; color:var(--muted); }
 .recupero .soldi { grid-column:2; grid-row:1 / span 2; font-variant-numeric:tabular-nums; white-space:nowrap; align-self:center; }
 .recupero .dove { margin-top:0.7rem; padding-top:0.6rem; border-top:1px dashed var(--border); }
+.recupero li.accettato { opacity:0.55; }
+.recupero li.accettato .quando { font-weight:500; text-decoration:line-through; text-decoration-thickness:1px; }
+/* Il bottoncino che toglie un periodo dalla lista. Volutamente piccolo e
+   sottotono: non è l'azione che ci si aspetta di fare, è l'eccezione. */
+.recupero button.lega, .recupero ul.archiviati button.lega {
+  background:none; border:0; padding:0; margin-left:0.5rem;
+  font:inherit; font-size:0.78rem; color:var(--brand); font-weight:600;
+  cursor:pointer; text-decoration:underline; text-underline-offset:2px;
+}
+.recupero button.lega:hover { opacity:0.75; }
+.recupero ul.archiviati li { grid-template-columns:1fr; opacity:0.75; }
+.recupero details summary { cursor:pointer; font-size:0.9rem; }
 .istogramma { width:100%; height:190px; display:block; }
 @media (max-width:600px) { .istogramma { height:150px; } }
 .istogramma .asse { stroke:var(--border); stroke-width:1; vector-effect:non-scaling-stroke; }
@@ -521,7 +533,7 @@ table.dati td.num { text-align:right; }
 
 /* La versione del programma. Serve a una cosa sola: accorgersi che quella
    pubblicata è più nuova di quella aperta. Va alzata a ogni pubblicazione. */
-const VERSIONE = 3;
+const VERSIONE = 5;
 
 const BASE = "https://dvkkxqfcxeebqlmtryxi.supabase.co";
 const ANON = "sb_publishable_PIvO1WmssAHUXXwy6nmz_w_W_tPxtNG";
@@ -744,12 +756,12 @@ const FIDUCIA = {
 const dati = {
   rapporti: [], identificativi: [], strumenti: [], documenti: [],
   file: [], copertura: [], attese: [], legami: [], sconosciuti: [],
-  conti: [], movimenti: [], scritture: [], nessi: [], note: [], mancanti: [],
+  conti: [], movimenti: [], scritture: [], nessi: [], note: [], mancanti: [], archiviati: [], copertura2: [],
 };
 
 async function ricarica() {
   const [rapporti, identificativi, strumenti, documenti, file, copertura, attese, legami, sconosciuti,
-         conti, movimenti, scritture, nessi, note, controparti, mancanti] =
+         conti, movimenti, scritture, nessi, note, controparti, mancanti, archiviati, copertura2] =
     await Promise.all([
       leggi("relationship", "select=*&order=institution_label,display_name"),
       leggi("relationship_identifier", "select=*"),
@@ -767,9 +779,11 @@ async function ricarica() {
       leggi("transaction_annotation", "select=*"),
       leggi("controparte", "select=*"),
       leggi("periodo_mancante", "select=*&order=rapporto,dal"),
+      leggi("periodo_archiviato", "select=*"),
+      leggi("copertura_rapporto", "select=*&order=mesi_scoperti.desc,rapporto"),
     ]);
   Object.assign(dati, { rapporti, identificativi, strumenti, documenti, file, copertura, attese, legami, sconosciuti,
-    conti, movimenti, scritture, nessi, note, controparti, mancanti });
+    conti, movimenti, scritture, nessi, note, controparti, mancanti, archiviati, copertura2 });
   indice.perControparte = new Map(controparti.map((c) => [c.chiave, c]));
 
   // Indici: con qualche migliaio di movimenti, cercare ogni volta a scansione
@@ -925,9 +939,13 @@ const archiviati = () => dati.file.filter((f) => f.archived_at);
    fra le spese, in una categoria che dice la verità su se stessa. Il giorno
    che l'estratto arriva, le righe vere prendono il posto del totale e la
    categoria si svuota da sola. */
+const chiavePeriodo = (p) => `${p.rapporto}|${p.dal}|${p.al}`;
+const archiviato = (p) => dati.archiviati.some((a) => chiavePeriodo(a) === chiavePeriodo(p));
+
 function daRecuperare() {
   const per = new Map();
   for (const m of dati.mancanti) {
+    if (archiviato(m)) continue;
     if (!per.has(m.rapporto)) per.set(m.rapporto, []);
     per.get(m.rapporto).push(m);
   }
@@ -963,7 +981,7 @@ function sezioneDaRecuperare() {
       periodo sparisce da questa lista.</p>
     </div>
     ${gruppi.map((g) => `
-      <div class="card recupero">
+      <div class="card recupero spesa">
         <div class="capo-recupero">
           <h3>${esc(g.rapporto)}</h3>
           <span class="quanto">${formattaCentesimi(g.totale, "EUR")}</span>
@@ -973,17 +991,137 @@ function sezioneDaRecuperare() {
         <ul class="periodi">
           ${g.righe.map((r) => `<li>
             <span class="quando">${esc(r.nota ?? `${r.dal} → ${r.al}`)}</span>
-            <span class="quanti">${r.pagamenti} pagament${r.pagamenti === 1 ? "o" : "i"}</span>
+            <span class="quanti">${r.pagamenti} pagament${r.pagamenti === 1 ? "o" : "i"}
+              <button class="lega" data-archivia-periodo="${esc(chiavePeriodo(r))}">non serve</button></span>
             <span class="soldi">${formattaCentesimi(BigInt(r.importo_minor), "EUR")}</span>
           </li>`).join("")}
         </ul>
         ${g.dove ? `<p class="note dove">${esc(g.dove)}</p>` : ""}
       </div>`).join("")}
+    ${archiviatiVisibili()}
+  `;
+}
+
+/* ── Quello che si è deciso di non recuperare ──────────────────────────────
+   Un periodo può risultare scoperto ed essere comunque inutile da chiedere:
+   la carta ••••92 ha pagato tre canoni annui e non ci si è mai speso niente.
+   Il calcolo non può saperlo — constata solo che il conto ha pagato e che
+   l'estratto non c'è. Lo sa l'intestatario, e qui lo scrive: la ragione resta
+   accanto alla decisione, e la decisione si può disfare. */
+function archiviatiVisibili() {
+  const suoi = dati.archiviati
+    .filter((a) => dati.mancanti.some((m) => chiavePeriodo(m) === chiavePeriodo(a)))
+    .sort((a, b) => a.rapporto.localeCompare(b.rapporto) || a.dal.localeCompare(b.dal));
+  if (!suoi.length) return "";
+  return `<details class="card recupero spesa archivio">
+    <summary><strong>${suoi.length}</strong> period${suoi.length === 1 ? "o" : "i"} che hai deciso di non recuperare</summary>
+    <ul class="periodi archiviati">
+      ${suoi.map((a) => `<li>
+        <span class="quando">${esc(a.rapporto)} — ${esc(mesiScritti(a.dal, a.al))}</span>
+        <span class="quanti">${esc(a.perche)}
+          <button class="lega" data-ripesca-periodo="${esc(chiavePeriodo(a))}">rimettilo in lista</button></span>
+      </li>`).join("")}
+    </ul>
+  </details>`;
+}
+
+const mesiScritti = (dal, al) => {
+  const m = (d) => `${MESI_LUNGHI[+d.slice(5, 7) - 1]} ${d.slice(0, 4)}`;
+  return dal.slice(0, 7) === al.slice(0, 7) ? m(dal) : `da ${m(dal)} a ${m(al)}`;
+};
+/* MESI_LUNGHI c'era già: sta più in basso, con l'analisi. */
+
+/** Toglie un periodo dalla lista, o ce lo rimette. La ragione è obbligatoria. */
+async function archiviaPeriodo(chiave, rimetti = false) {
+  const [rapporto, dal, al] = chiave.split("|");
+  const filtro = `rapporto=eq.${encodeURIComponent(rapporto)}&dal=eq.${dal}&al=eq.${al}` +
+    `&owner=eq.${sessione.utente.id}`;
+  if (rimetti) {
+    await cancella("periodo_archiviato", filtro);
+    await traccia("periodo.ripreso", "periodo_mancante", chiave, null);
+  } else {
+    const perche = prompt(`Perché questo periodo non serve recuperarlo?\n\n${rapporto} — ${mesiScritti(dal, al)}`);
+    if (!perche || !perche.trim()) return;   // senza una ragione non si archivia
+    await scrivi("periodo_archiviato",
+      [{ owner: sessione.utente.id, rapporto, dal, al, perche: perche.trim() }],
+      { fondi: true, conflitto: "owner,rapporto,dal,al" });
+    await traccia("periodo.archiviato", "periodo_mancante", chiave, perche.trim());
+  }
+  await ricarica();
+  disegna();
+}
+
+/* ── La copertura dei documenti, rapporto per rapporto ─────────────────────
+   Il controllo che c'era prima guardava se un conto avesse MOVIMENTI in ogni
+   mese. Si lasciava ingannare, e lo si è scoperto per caso: PayPal dal 2020 al
+   2023 di movimenti ne aveva — le ricariche viste dal conto — e risultava
+   coperto. Ma un movimento visto dall'altra parte non è un documento: dice che
+   dei soldi sono usciti, non a chi sono andati.
+
+   Questo guarda i DOCUMENTI, e il periodo che ciascuno dichiara di coprire. Il
+   calcolo lo fa chi legge i documenti, non l'app: qui si mostra e basta. */
+/* Un buco può essere accertato e chiuso lo stesso: l'estratto PayPal di un
+   conto personale non va più indietro del 01.01.2024, e quello che non esiste
+   non si recupera. Resta scritto — il buco è un fatto — ma smette di chiedere
+   attenzione, con accanto la ragione per cui è stato accettato. */
+const accettato = (rapporto, b) => dati.archiviati.find((a) =>
+  a.rapporto === rapporto && a.dal.slice(0, 7) === b.inizio && a.al.slice(0, 7) === b.fine);
+const scopertiVeri = (r) => (r.blocchi ?? []).filter((b) => !accettato(r.rapporto, b));
+
+function sezioneCopertura() {
+  const righe = dati.copertura2.slice()
+    .sort((a, b) => b.mesi_scoperti - a.mesi_scoperti || a.rapporto.localeCompare(b.rapporto));
+  if (!righe.length) return "";
+  const scoperti = righe.filter((r) => r.mesi_scoperti > 0);
+  const dedotti = righe.filter((r) => !r.mesi_scoperti && r.ricavati);
+
+  return `
+    ${sezione("Copertura dei documenti", `${righe.length - scoperti.length} su ${righe.length} rapporti coperti per intero`)}
+    <div class="card">
+      <p class="note">Per ogni rapporto: da quando risulta vivo, quanti documenti lo coprono e
+      quali mesi non sono coperti da nessun documento. Non conta i movimenti — un movimento
+      visto dall'altra parte dice che dei soldi sono usciti, non a chi sono andati.</p>
+    </div>
+    ${scoperti.map((r) => `
+      <div class="card recupero copertura">
+        <div class="capo-recupero">
+          <h3>${esc(r.rapporto)}</h3>
+          <span class="quanto">${r.mesi_scoperti} mesi scoperti${
+            scopertiVeri(r).length < (r.blocchi ?? []).length ? " · accettati" : ""}</span>
+        </div>
+        <p class="sub-recupero">vivo da ${esc(meseEsteso(r.vivo_dal.slice(0, 7)))}
+          a ${esc(meseEsteso(r.vivo_al.slice(0, 7)))} · ${r.mesi_vivi} mesi ·
+          ${r.documenti} document${r.documenti === 1 ? "o" : "i"}</p>
+        <ul class="periodi">
+          ${(r.blocchi ?? []).map((b) => { const ok = accettato(r.rapporto, b); return `<li${ok ? ' class="accettato"' : ""}>
+            <span class="quando">${esc(b.inizio === b.fine ? meseEsteso(b.inizio)
+              : `da ${meseEsteso(b.inizio)} a ${meseEsteso(b.fine)}`)}</span>
+            <span class="quanti">${ok ? esc(ok.perche) : "nessun documento copre questi mesi"}</span>
+          </li>`; }).join("")}
+        </ul>
+      </div>`).join("")}
+    ${righe.length > scoperti.length ? `
+      <details class="card recupero copertura tutte">
+        <summary><strong>${righe.length - scoperti.length}</strong> rapporti coperti per intero</summary>
+        <ul class="periodi">
+          ${righe.filter((r) => !r.mesi_scoperti).map((r) => `<li>
+            <span class="quando">${esc(r.rapporto)}</span>
+            <span class="quanti">${r.documenti} document${r.documenti === 1 ? "o" : "i"} ·
+              ${esc(meseEsteso(r.vivo_dal.slice(0, 7)))} → ${esc(meseEsteso(r.vivo_al.slice(0, 7)))}${
+                r.ricavati ? " · periodo dedotto dalle righe, non dichiarato" : ""}</span>
+          </li>`).join("")}
+        </ul>
+      </details>` : ""}
+    ${dedotti.length ? `<div class="avviso warn">
+      <strong>${dedotti.length} rapport${dedotti.length === 1 ? "o è coperto" : "i sono coperti"} da documenti
+      che non dichiarano il periodo.</strong> Il periodo è dedotto dalle date delle righe: se l'export
+      ha perso le righe di un mese in mezzo, quel mese risulta coperto lo stesso. È l'unico punto
+      dove un buco potrebbe restare invisibile.</div>` : ""}
   `;
 }
 
 function paginaLetture() {
-  const buchi = periodiMancanti();
+  const buchi = dati.copertura2.filter((r) => r.mesi_scoperti > 0);
   const problemi = daGuardare();
   /* Un file archiviato non e' piu' «formato non riconosciuto»: e' un
      documento messo da parte. Continuare a contarlo per il vecchio esito
@@ -1066,24 +1204,7 @@ function paginaLetture() {
         Ogni file dell'archivio o è nei conti, o non doveva esserci.
       </div>`}
 
-    ${buchi.length ? `
-      <h2>Periodi senza documenti <span class="sub">gli ultimi due anni</span></h2>
-      <div class="avviso warn">
-        <strong>${buchi.length} rapport${buchi.length === 1 ? "o ha" : "i hanno"} dei mesi scoperti.</strong>
-        In quei mesi le spese risultano zero — e non è che non hai speso: è che manca il documento.
-      </div>
-      ${buchi.map((b) => `
-        <div class="card">
-          <h3>${esc(nomeConto(b.conto))}</h3>
-          ${b.mancanti.length ? `
-            <p class="note risk">Nessun movimento in ${b.mancanti.length} mes${b.mancanti.length === 1 ? "e" : "i"},
-            fra periodi che invece ci sono: ${esc(b.mancanti.slice(0, 18).map(meseEsteso).join(", "))}${
-              b.mancanti.length > 18 ? " …" : ""}.</p>` : ""}
-          ${b.fermoDa ? `<p class="note">L'ultimo movimento è di ${esc(meseEsteso(b.fermoDa))}.
-            Se il conto è chiuso o fermo va bene così; se non lo è, manca l'ultimo estratto.</p>` : ""}
-        </div>`).join("")}
-    ` : `<div class="avviso ok"><strong>Nessun periodo scoperto negli ultimi due anni.</strong>
-         Ogni mese di ogni rapporto ha almeno un movimento.</div>`}
+    ${sezioneCopertura()}
 
     ${archiviati().length ? `
       <h2>Archiviati <span class="sub">non sono estratti conto</span></h2>
@@ -1353,7 +1474,8 @@ function alberoDeiRapporti() {
 
   /* L'ordine: prima le banche con più soldi, e i conti tecnici sempre in
      fondo. Un elenco che cambia ordine da solo non si impara mai. */
-  const totale = (v) => v.reduce((s, x) => s + (NATURE[x.natura]?.patrimonio ? x.saldo : 0n), 0n);
+  const totale = (v) => v.flatMap((x) => [x, ...(x.carte ?? [])])
+    .reduce((s, x) => s + (NATURE[x.natura]?.patrimonio ? x.saldo : 0n), 0n);
   /* I contanti non sono una banca: sono l'ultima riga, dopo le banche. */
   const peso = (g) => (g.voci.every((v) => v.natura === "contanti") ? 1 : 0);
   return {
@@ -1394,7 +1516,7 @@ function paginaSituazione() {
   const inRitardo = scadute();
   const nonConfermati = daConfermare();
   const nonLetti = daGuardare();
-  const buchi = periodiMancanti();
+  const buchi = dati.copertura2.filter((r) => r.mesi_scoperti > 0 && scopertiVeri(r).length);
 
   const albero = alberoDeiRapporti();
   const banche = albero.istituti.map((i) => i.nome);
@@ -1404,10 +1526,17 @@ function paginaSituazione() {
      debiti delle carte si sottraggono, e PayPal — che è un modo di pagare —
      non si somma affatto. */
   const voci = mostrati.flatMap((i) => i.voci);
-  const patrimonio = voci.reduce((s, v) => s + (NATURE[v.natura]?.patrimonio ? v.saldo : 0n), 0n);
-  const debiti = voci.flatMap((v) => v.carte ?? []).reduce((s, f) => s + (f.saldo < 0n ? -f.saldo : 0n), 0n);
+  /* Sotto un conto non ci sono solo carte: sotto Wise e Revolut ci sono le
+     tasche nelle altre valute, che sono patrimonio quanto quella in euro.
+     Contare solo le voci di primo livello le faceva sparire dal totale —
+     e un patrimonio che sparisce non lo nota nessuno. Si discrimina per
+     NATURA, non per posizione nell'albero. */
+  const tutte = voci.flatMap((v) => [v, ...(v.carte ?? [])]);
+  const patrimonio = tutte.reduce((s, v) => s + (NATURE[v.natura]?.patrimonio ? v.saldo : 0n), 0n);
+  const debiti = tutte.reduce((s, f) =>
+    s + (NATURE[f.natura]?.patrimonio || f.saldo >= 0n ? 0n : -f.saldo), 0n);
 
-  const fette = voci.filter((v) => NATURE[v.natura]?.patrimonio && v.saldo > 0n)
+  const fette = tutte.filter((v) => NATURE[v.natura]?.patrimonio && v.saldo > 0n)
     .sort((a, b) => Number(b.saldo - a.saldo))
     .map((v, i) => ({ ...v, colore: COLORI[i % COLORI.length] }));
   const paypal = dati.conti.find((c) => naturaDi(c) === "passante");
@@ -1423,7 +1552,7 @@ function paginaSituazione() {
         ${nonLetti.length ? `<a class="allerta err" href="#/letture">
           <b>${nonLetti.length}</b> document${nonLetti.length === 1 ? "o non è entrato" : "i non sono entrati"} nei conti</a>` : ""}
         ${buchi.length ? `<a class="allerta warn" href="#/letture">
-          <b>${buchi.length}</b> rapport${buchi.length === 1 ? "o ha" : "i hanno"} mesi senza documenti</a>` : ""}
+          <b>${buchi.length}</b> rapport${buchi.length === 1 ? "o ha" : "i hanno"} mesi senza nessun documento</a>` : ""}
         ${daRecuperare().length ? `<a class="allerta warn" href="#/letture">
           <b>${daRecuperare().length}</b> ${daRecuperare().length === 1 ? "rapporto ha" : "rapporti hanno"} estratti da recuperare —
           ${formattaCentesimi(daRecuperare().reduce((t, g) => t + g.totale, 0n), "EUR")} di spesa senza dettaglio</a>` : ""}
@@ -3175,49 +3304,10 @@ function dettaglioMovimento(m) {
     </div>`;
 }
 
-/* ── I periodi che mancano ──────────────────────────────────────────────────
-   Di un conto non si hanno per forza tutti gli anni, e va bene. Ma un mese
-   VUOTO in mezzo a due mesi pieni non è un mese tranquillo: è un mese di cui
-   manca il documento. Sugli ultimi due anni quel buco va detto, perché in
-   quei mesi le spese risultano zero e sembrano zero davvero.
-   ─────────────────────────────────────────────────────────────────────────── */
-function periodiMancanti() {
-  const oggi = new Date().toISOString().slice(0, 7);
-  const meno = (mese, n) => {
-    const [a, m] = mese.split("-").map(Number);
-    const t = new Date(Date.UTC(a, m - 1 - n, 1));
-    return t.toISOString().slice(0, 7);
-  };
-  const limite = meno(oggi, 23);
-
-  const buchi = [];
-  for (const c of dati.conti.filter((x) => ["asset_cash", "liability_credit"].includes(x.kind))) {
-    /* perMovimento tiene le SCRITTURE di un movimento, non il movimento:
-       cercarci dentro la data restituiva undefined e la pagina non si
-       disegnava più. Il movimento sta in dati.movimenti. */
-    const mesi = new Set();
-    for (const s of dati.scritture) {
-      if (s.account_id !== c.id) continue;
-      const t = indice.perTransazione.get(s.transaction_id);
-      if (t) mesi.add(t.economic_date.slice(0, 7));
-    }
-    if (mesi.size < 2) continue;
-    const ordinati = [...mesi].sort();
-    const primo = ordinati[0], ultimo = ordinati.at(-1);
-
-    const mancanti = [];
-    let m = primo < limite ? limite : primo;
-    while (m <= ultimo) {
-      if (!mesi.has(m)) mancanti.push(m);
-      const [a, k] = m.split("-").map(Number);
-      m = new Date(Date.UTC(a, k, 1)).toISOString().slice(0, 7);
-    }
-    // Un conto fermo da un pezzo non è un buco: è un conto fermo.
-    const fermoDa = ultimo < meno(oggi, 2) ? ultimo : null;
-    if (mancanti.length || fermoDa) buchi.push({ conto: c, mancanti, ultimo, fermoDa });
-  }
-  return buchi;
-}
+/* Il controllo dei periodi scoperti non sta più qui: guardava i MOVIMENTI, e
+   un movimento visto dall'altra parte non prova che esista un documento. Ora lo
+   fa chi legge i documenti, confrontando i periodi che ciascuno dichiara, e il
+   risultato arriva nella tabella `copertura_rapporto`. Vedi sezioneCopertura(). */
 
 /* ── Analisi ────────────────────────────────────────────────────────────────
    Le domande che uno si fa davvero: dove sono finiti i soldi, da dove sono
@@ -4096,6 +4186,10 @@ function collega(p, arg) {
       b.onclick = () => archiviaDocumento(b.dataset.archivia);
     for (const b of document.querySelectorAll("[data-riprendi]"))
       b.onclick = () => archiviaDocumento(b.dataset.riprendi, true);
+    for (const b of document.querySelectorAll("[data-archivia-periodo]"))
+      b.onclick = () => archiviaPeriodo(b.dataset.archiviaPeriodo);
+    for (const b of document.querySelectorAll("[data-ripesca-periodo]"))
+      b.onclick = () => archiviaPeriodo(b.dataset.ripescaPeriodo, true);
     const copia = document.getElementById("copia-richiesta");
     if (copia) copia.onclick = async () => {
       const t = document.getElementById("richiesta");
