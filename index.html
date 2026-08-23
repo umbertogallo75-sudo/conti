@@ -83,6 +83,16 @@ nav.sezioni a {
 nav.sezioni a[aria-current="page"] {
   background:var(--surface); color:var(--brand); box-shadow:var(--ombra);
 }
+.note.stretta { font-size:0.82rem; padding-top:0.25rem; padding-bottom:0.25rem; }
+
+details.identificativi { margin-top:0.5rem; }
+details.identificativi > summary {
+  cursor:pointer; font-size:0.8rem; color:var(--muted); list-style:none;
+}
+details.identificativi > summary::-webkit-details-marker { display:none; }
+details.identificativi > summary::before { content:"▸ "; }
+details.identificativi[open] > summary::before { content:"▾ "; }
+
 nav.sezioni a .n {
   display:inline-block; margin-left:0.35rem; padding:0 0.34rem; border-radius:999px;
   background:var(--brand-chiaro); color:var(--brand); font-size:0.75rem;
@@ -284,12 +294,14 @@ details.tendina .voce input { width:1rem; height:1rem; flex:0 0 auto; }
 }
 .banche .scheda.viva { background:var(--accent); border-color:var(--accent); color:#fff; }
 
-.allerte { display:grid; gap:0.4rem; margin-bottom:0.9rem; }
+.card.allerte { padding:0; overflow:hidden; }
 .allerta {
-  display:block; padding:0.55rem 0.8rem; border-radius:8px; text-decoration:none;
-  border:1px solid var(--border); color:var(--text); font-size:0.88rem;
-  border-left-width:4px; border-left-color:var(--accent);
+  display:block; padding:0.62rem 0.9rem; text-decoration:none;
+  border-top:1px solid var(--border); border-left:4px solid var(--accent);
+  color:var(--text); font-size:0.88rem;
 }
+.allerta:first-child { border-top:0; }
+.allerta:hover { background:var(--surface-2); }
 .allerta b { font-size:1rem; }
 .allerta.err { border-left-color:var(--stop); }
 .allerta.warn { border-left-color:var(--warn); }
@@ -297,7 +309,9 @@ details.tendina .voce input { width:1rem; height:1rem; flex:0 0 auto; }
 .quadro { display:grid; gap:1.2rem; align-items:start; }
 @media (min-width: 760px) { .quadro { grid-template-columns:200px 1fr; } }
 .quadro .disegno { position:relative; display:grid; place-items:center; }
-.quadro .ciambella { width:min(200px, 62vw); height:auto; }
+/* Sul telefono la ciambella prendeva mezza schermata prima dell'elenco dei
+   conti, che è la cosa che si vuole vedere. Più piccola dice la stessa cosa. */
+.quadro .ciambella { width:min(200px, 46vw); height:auto; }
 .quadro .centro { position:absolute; text-align:center; line-height:1.2; }
 .quadro .centro span { display:block; font-size:0.68rem; color:var(--muted); }
 .quadro .centro strong { display:block; font-size:1.05rem; font-variant-numeric:tabular-nums; }
@@ -427,6 +441,7 @@ table.dati td.num { text-align:right; }
 /* I periodi vanno a capo come tutto il resto: scorrere di lato per trovare
    «Quest'anno» significa non trovarlo. */
 .pillole { display:flex; flex-wrap:wrap; gap:0.35rem; }
+.pillole select { width:auto; padding:0.3rem 0.6rem; border-radius:999px; font-size:0.82rem; }
 .pillole::-webkit-scrollbar { display:none; }
 .pillole button {
   font:inherit; font-size:0.82rem; white-space:nowrap; cursor:pointer; flex:0 0 auto;
@@ -581,7 +596,7 @@ table.dati td.num { text-align:right; }
 
 /* La versione del programma. Serve a una cosa sola: accorgersi che quella
    pubblicata è più nuova di quella aperta. Va alzata a ogni pubblicazione. */
-const VERSIONE = 7;
+const VERSIONE = 8;
 
 const BASE = "https://dvkkxqfcxeebqlmtryxi.supabase.co";
 const ANON = "sb_publishable_PIvO1WmssAHUXXwy6nmz_w_W_tPxtNG";
@@ -1614,27 +1629,39 @@ function paginaSituazione() {
       ${banche.map((b) => `<button class="scheda${bancaAperta === b ? " viva" : ""}" data-banca="${esc(b)}">${esc(b)}</button>`).join("")}
     </div>
 
-    ${nonLetti.length || buchi.length || inRitardo.length || nonConfermati.length ? `
-      <div class="allerte">
-        ${nonLetti.length ? `<a class="allerta err" href="#/letture">
-          <b>${nonLetti.length}</b> document${nonLetti.length === 1 ? "o non è entrato" : "i non sono entrati"} nei conti</a>` : ""}
-        ${buchi.length ? `<a class="allerta warn" href="#/letture">
-          <b>${buchi.length}</b> rapport${buchi.length === 1 ? "o ha" : "i hanno"} mesi senza nessun documento</a>` : ""}
-        ${daRecuperare().length ? `<a class="allerta warn" href="#/letture">
-          <b>${daRecuperare().length}</b> ${daRecuperare().length === 1 ? "rapporto ha" : "rapporti hanno"} estratti da recuperare —
-          ${formattaCentesimi(daRecuperare().reduce((t, g) => t + g.totale, 0n), "EUR")} di spesa senza dettaglio</a>` : ""}
-        ${inRitardo.length ? `<a class="allerta warn" href="#/solleciti">
-          <b>${inRitardo.length}</b> document${inRitardo.length === 1 ? "o" : "i"} in ritardo</a>` : ""}
-        ${nonConfermati.length ? `<a class="allerta" href="#/rapporti">
-          <b>${nonConfermati.length}</b> rapport${nonConfermati.length === 1 ? "o" : "i"} da confermare</a>` : ""}
-      </div>` : `<div class="avviso ok">Tutto quadra: nessun documento fuori, nessun periodo scoperto.</div>`}
-
     ${testata({
       occhiello: bancaAperta || "Tutti i rapporti",
       grande: formattaCentesimi(patrimonio),
       sotto: `disponibile fra conti, prepagate e titoli${debiti > 0n
         ? ` · <strong>${formattaCentesimi(debiti)}</strong> di carte ancora da saldare` : ""}`,
     })}
+
+    ${(() => {
+      /* Gli avvisi stanno DOPO i soldi, non prima. La prima cosa che si vuole
+         sapere aprendo l'app è quanto c'è; le cose da sistemare vengono
+         subito dopo, ma vengono dopo. E stanno in una cassetta sola, in
+         ordine di gravità: cinque cartelli uno sotto l'altro non sono cinque
+         avvisi, sono un muro. */
+      const voci = [
+        nonLetti.length && { g: "err", via: "#/documenti/letture", n: nonLetti.length,
+          testo: `document${nonLetti.length === 1 ? "o non è entrato" : "i non sono entrati"} nei conti` },
+        buchi.length && { g: "warn", via: "#/documenti/letture", n: buchi.length,
+          testo: `rapport${buchi.length === 1 ? "o ha" : "i hanno"} mesi senza nessun documento` },
+        daRecuperare().length && { g: "warn", via: "#/documenti/letture", n: daRecuperare().length,
+          testo: `${daRecuperare().length === 1 ? "rapporto ha" : "rapporti hanno"} estratti da recuperare — ${
+            formattaCentesimi(daRecuperare().reduce((t, g) => t + g.totale, 0n), "EUR")} di spesa senza dettaglio` },
+        inRitardo.length && { g: "warn", via: "#/documenti/solleciti", n: inRitardo.length,
+          testo: `document${inRitardo.length === 1 ? "o" : "i"} in ritardo` },
+        nonConfermati.length && { g: "", via: "#/rapporti", n: nonConfermati.length,
+          testo: `rapport${nonConfermati.length === 1 ? "o" : "i"} da confermare` },
+      ].filter(Boolean);
+      if (!voci.length)
+        return `<div class="avviso ok">Tutto quadra: nessun documento fuori, nessun periodo scoperto.</div>`;
+      return `<div class="card allerte">
+        ${voci.map((v) => `<a class="allerta ${v.g}" href="${v.via}">
+          <b>${v.n}</b> ${v.testo}</a>`).join("")}
+      </div>`;
+    })()}
 
     <div class="card quadro">
       <div class="disegno">
@@ -1869,9 +1896,31 @@ function paginaRapporti() {
 
   const daRivedere = conDiagnosi.filter((x) => x.avvisi.length).length;
 
+  /* Raggruppati per banca, come nella Situazione. Un elenco piatto di ventidue
+     schede tutte uguali non si legge: si scorre. Raggruppato si guarda una
+     banca alla volta, che è il modo in cui uno ci pensa. */
+  const perIstituto = new Map();
+  for (const x of elenco) {
+    const k = x.r.institution_label || x.r.institution_key || "—";
+    if (!perIstituto.has(k)) perIstituto.set(k, []);
+    perIstituto.get(k).push(x);
+  }
+
   return `
-    <div class="card">
-      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.5rem">
+    ${testata({
+      occhiello: "Rapporti",
+      grande: `${dati.rapporti.length}`,
+      sotto: daRivedere
+        ? `<strong>${daRivedere}</strong> con qualcosa che non torna · ${
+            dati.rapporti.filter((r) => r.confirmation === "proposed").length} ancora da confermare`
+        : "Tutti confermati e senza contraddizioni.",
+      delta: elenco.length !== dati.rapporti.length
+        ? `<span class="delta">${elenco.length} con questi filtri</span>` : "",
+    })}
+
+    <details class="card filtri"${filtriRapAperti ? " open" : ""}>
+      <summary>Filtra</summary>
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin:0.6rem 0 0.5rem">
         <select id="f-istituto" style="flex:1;min-width:145px">
           <option value="">Tutti gli istituti</option>
           ${istituti.map((i) => `<option value="${esc(i)}"${filtroRap.istituto === i ? " selected" : ""}>${esc(i)}</option>`).join("")}
@@ -1888,11 +1937,11 @@ function paginaRapporti() {
         </select>
       </div>
       <input type="text" id="f-cerca" placeholder="Cerca per nome o per numero…" value="${esc(filtroRap.cerca)}">
-      <div class="meta"><span>${elenco.length} di ${dati.rapporti.length}</span>
-        ${daRivedere ? `<span>${daRivedere} con qualcosa che non torna</span>` : ""}</div>
-    </div>
+    </details>
 
-    ${elenco.length ? elenco.map(({ r, avvisi, docs }) => {
+    ${elenco.length ? [...perIstituto.entries()].map(([banca, suoi]) => `
+      ${sezione(banca, `${suoi.length} rapport${suoi.length === 1 ? "o" : "i"}`)}
+      ${suoi.map(({ r, avvisi, docs }) => {
       const ident = identDi(r.id);
       const strum = dati.strumenti.filter((s) => s.relationship_id === r.id);
       const cop = dati.copertura.filter((c) => c.relationship_id === r.id);
@@ -1918,17 +1967,21 @@ function paginaRapporti() {
             ${inizi.length ? `<span>${dataBreve(inizi[0])} → ${dataBreve(fini[fini.length - 1])}</span>` : ""}
             ${r.cadence ? `<span>cadenza ${esc(CADENZA[r.cadence] ?? r.cadence)}</span>` : ""}
           </div>
-          ${ident.length ? `<div class="meta">${ident.slice(0, 6).map((i) =>
-            `<span><code>${esc(i.masked)}</code></span>`).join("")}${
-            ident.length > 6 ? `<span>e altri ${ident.length - 6}</span>` : ""}</div>` : ""}
-          ${strum.length ? `<div class="note proof">Carte: ${strum.map((s) => esc(s.masked_pan)).join(" → ")}</div>` : ""}
-          ${avvisi.map((a) => `<div class="note ${a.gravita === "stop" ? "stop" : "risk"}"><strong>${esc(a.titolo)}</strong> — ${esc(a.dettaglio)}</div>`).join("")}
+          ${ident.length ? `<details class="identificativi">
+            <summary>${ident.length} identificativ${ident.length === 1 ? "o" : "i"}${
+              strum.length ? ` · ${strum.length} cart${strum.length === 1 ? "a" : "e"}` : ""}</summary>
+            <div class="meta">${ident.map((i) => `<span><code>${esc(i.masked)}</code></span>`).join("")}</div>
+            ${strum.length ? `<div class="note proof">Carte: ${strum.map((s) => esc(s.masked_pan)).join(" → ")}</div>` : ""}
+          </details>` : ""}
+          ${/* Le contraddizioni si vedono tutte: è per quelle che questa pagina
+                esiste. Sono strette, non tagliate. */""}
+          ${avvisi.map((a) => `<div class="note stretta ${a.gravita === "stop" ? "stop" : "risk"}"><strong>${esc(a.titolo)}</strong> — ${esc(a.dettaglio)}</div>`).join("")}
           <div class="actions">
             <a class="tile" style="padding:0.45rem 0.85rem;border-color:var(--accent);color:var(--accent);font-weight:600;font-size:0.83rem;display:inline-block"
                href="#/rapporto/${esc(r.id)}">Apri e verifica</a>
           </div>
         </div>`;
-    }).join("") : vuoto("Nessun rapporto con questi filtri.")}
+      }).join("")}`).join("") : vuoto("Nessun rapporto con questi filtri.")}
 
     ${dati.sconosciuti.length && !filtroRap.istituto && !filtroRap.genere && !filtroRap.stato ? `
       <h2>Nominati ma senza documenti <span class="sub">${dati.sconosciuti.length}</span></h2>
@@ -2829,6 +2882,10 @@ let bozzaMov = filtroVuoto();
    sono i movimenti, non otto campi da riempire. Su schermo largo lo spazio
    c'è e resta aperto. Una volta aperto, resta aperto. */
 let filtriAperti = typeof matchMedia === "function" ? matchMedia("(min-width: 760px)").matches : true;
+/* Sul telefono i filtri partono chiusi: occupano mezza schermata e la maggior
+   parte delle volte non servono. Sullo schermo grande stanno aperti, che tanto
+   c'è posto. */
+let filtriRapAperti = filtriAperti;
 const copiaFiltro = (f) => JSON.parse(JSON.stringify(f));
 
 /* «2 selezionati» dice quanto si è scelto senza occupare tre righe di elenco. */
@@ -3612,10 +3669,11 @@ function paginaAnalisi() {
   const saldo = a.incassato - a.speso;
   const saldoPrec = b ? b.incassato - b.speso : 0n;
 
-  const scelte = [
-    ["3m", "3 mesi"], ["12m", "12 mesi"], ["24m", "24 mesi"],
-    ["ytd", "Quest'anno"], ...anni.slice(0, 6).map((x) => [x, x]), ["tutto", "Tutto"],
-  ];
+  /* Cinque pulsanti e un menù, non undici pulsanti. Gli anni singoli si
+     scelgono raramente e occupavano due righe intere: stanno in una tendina,
+     dove uno li va a cercare quando gli servono. */
+  const scelte = [["3m", "3 mesi"], ["12m", "12 mesi"], ["24m", "24 mesi"],
+                  ["ytd", "Quest'anno"], ["tutto", "Tutto"]];
 
   /* La ciambella prende le prime otto categorie e mette le altre insieme:
      ventidue spicchi sono un cerchio colorato, non un'informazione. */
@@ -3634,7 +3692,11 @@ function paginaAnalisi() {
       sotto: `usciti davvero, su ${a.n.toLocaleString("it-IT")} movimenti${P.dal ? ` fra il ${dataBreve(P.dal)} e il ${dataBreve(P.al)}` : ""}`,
       delta: b ? chipDelta(a.speso, b.speso, { comeCosa: P.prec.nome }) : "",
       azioni: `<div class="pillole">${scelte.map(([k, n]) =>
-        `<button data-periodo="${esc(k)}"${periodoAnalisi === k ? ' class="viva"' : ""}>${esc(n)}</button>`).join("")}</div>`,
+        `<button data-periodo="${esc(k)}"${periodoAnalisi === k ? ' class="viva"' : ""}>${esc(n)}</button>`).join("")}
+        <select id="anno-analisi" aria-label="Un anno preciso">
+          <option value="">Un anno…</option>
+          ${anni.map((x) => `<option value="${esc(x)}"${periodoAnalisi === x ? " selected" : ""}>${esc(x)}</option>`).join("")}
+        </select></div>`,
     })}
 
     <div class="tiles">
@@ -4346,6 +4408,8 @@ function collega(p, arg) {
   }
 
   if (p === "rapporti") {
+    const pann = document.querySelector("details.card.filtri");
+    if (pann) pann.ontoggle = () => { filtriRapAperti = pann.open; };
     const aggiorna = (campo) => (e) => { filtroRap[campo] = e.target.value; disegna(); };
     /* I filtri esistono solo se c'è qualcosa da filtrare: senza rapporti la
        pagina è un messaggio, e cercare i menù a tendina fermava tutto il
@@ -4400,6 +4464,8 @@ function collega(p, arg) {
   if (p === "analisi") {
     for (const b of document.querySelectorAll("[data-periodo]"))
       b.onclick = () => { periodoAnalisi = b.dataset.periodo; disegna(); };
+    const anno = document.getElementById("anno-analisi");
+    if (anno) anno.onchange = (e) => { if (e.target.value) { periodoAnalisi = e.target.value; disegna(); } };
   }
 
   if (p === "") {
