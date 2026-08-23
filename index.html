@@ -3788,7 +3788,10 @@ async function importaAnalisi(file) {
     if (contenuto.versione !== 1 || !contenuto.ordine) throw new Error("Il file non ha il formato atteso.");
 
     const CONFLITTI = { document_relationship: "owner,document_id,relationship_id",
-                        transaction_link: "owner,from_id,to_id,kind" };
+                        transaction_link: "owner,from_id,to_id,kind",
+                        /* Una controparte è identificata dalla sua chiave: ricaricare
+                           lo stesso file aggiorna la riga, non ne crea una seconda. */
+                        controparte: "owner,chiave" };
     const totale = contenuto.ordine.length;
     let righeTotali = 0;
 
