@@ -96,6 +96,135 @@ button.act {
 button.act.ghost { background:transparent; color:var(--text); border-color:var(--border); }
 button.act.pericolo { background:transparent; color:var(--stop); border-color:var(--stop); }
 button.act[disabled] { opacity:0.5; cursor:default; }
+.filtri .griglia-filtri {
+  display:grid; gap:0.7rem 0.8rem;
+  grid-template-columns:repeat(auto-fit, minmax(210px, 1fr));
+}
+.filtri .campo.larga { grid-column:1 / -1; }
+.filtri .coppia { display:flex; gap:0.4rem; }
+.filtri .coppia > * { flex:1; min-width:0; }
+.filtri .azioni-filtri {
+  display:flex; align-items:center; gap:0.8rem; flex-wrap:wrap;
+  margin-top:0.9rem; padding-top:0.8rem; border-top:1px solid var(--border);
+}
+.filtri .azioni-filtri .note { flex:1; margin:0; border:0; padding:0; }
+details.tendina {
+  border:1px solid var(--border); border-radius:8px; background:var(--sfondo-campo, #fff);
+}
+details.tendina > summary {
+  list-style:none; cursor:pointer; padding:0.5rem 0.6rem; font-size:0.9rem;
+  display:flex; justify-content:space-between; align-items:center;
+}
+details.tendina > summary::-webkit-details-marker { display:none; }
+details.tendina > summary::after { content:"▾"; color:var(--muted); margin-left:0.5rem; }
+details.tendina[open] > summary::after { content:"▴"; }
+details.tendina .voci { max-height:14rem; overflow:auto; border-top:1px solid var(--border); padding:0.3rem; }
+details.tendina .voce {
+  display:flex; align-items:center; gap:0.5rem; padding:0.35rem 0.4rem;
+  font-size:0.88rem; border-radius:6px; cursor:pointer;
+}
+details.tendina .voce:hover { background:var(--riga, rgba(0,0,0,0.04)); }
+details.tendina .voce input { width:1rem; height:1rem; flex:0 0 auto; }
+
+/* ── L'elenco dei movimenti, nella forma di un estratto conto ───────────── */
+.riga-mov { border-bottom:1px solid var(--border); background:var(--carta, #fff); }
+.riga-mov:first-of-type { border-top:1px solid var(--border); }
+.riga-mov.aperta { background:var(--riga, rgba(0,0,0,0.02)); }
+.riga-mov.provvisoria .testa { background:repeating-linear-gradient(135deg,
+  transparent, transparent 8px, rgba(0,0,0,0.02) 8px, rgba(0,0,0,0.02) 16px); }
+.riga-mov .testa {
+  display:grid; align-items:center; gap:0.6rem; padding:0.7rem 0.6rem; cursor:pointer;
+  grid-template-columns:2.6rem minmax(0,1fr) auto;
+}
+@media (min-width: 760px) {
+  .riga-mov .testa { grid-template-columns:3rem minmax(0,1fr) 7rem 9rem auto 1.2rem; }
+}
+.riga-mov .quando { text-align:center; line-height:1.05; }
+.riga-mov .quando b { display:block; font-size:1.15rem; }
+.riga-mov .quando span { display:block; font-size:0.66rem; letter-spacing:0.05em; color:var(--muted); }
+.riga-mov .quando i { display:block; font-size:0.6rem; font-style:normal; color:var(--muted); opacity:0.7; }
+.riga-mov .che-cosa strong { display:block; font-size:0.92rem; font-weight:600; }
+.riga-mov .che-cosa .sotto { display:flex; flex-wrap:wrap; gap:0.35rem; align-items:center; margin-top:0.15rem; }
+.riga-mov .che-cosa .conto { font-size:0.78rem; color:var(--muted); }
+.riga-mov .etichetta {
+  font-size:0.7rem; padding:0.05rem 0.4rem; border-radius:999px;
+  border:1px solid var(--accent); color:var(--accent);
+}
+.riga-mov .istituto { font-size:0.72rem; color:var(--muted); text-align:center; }
+.riga-mov .genere { display:flex; align-items:center; gap:0.4rem; min-width:0; }
+.riga-mov .genere > span:last-child {
+  font-size:0.64rem; letter-spacing:0.03em; color:var(--muted); line-height:1.1;
+}
+.riga-mov .tondo {
+  flex:0 0 auto; width:1.9rem; height:1.9rem; border-radius:999px;
+  border:1px solid var(--accent); display:grid; place-items:center;
+}
+.riga-mov .tondo svg { width:1rem; height:1rem; fill:none; stroke:var(--accent); stroke-width:1.7;
+  stroke-linecap:round; stroke-linejoin:round; }
+.riga-mov .quanto { text-align:right; white-space:nowrap; }
+.riga-mov .quanto b { font-size:1rem; font-variant-numeric:tabular-nums; }
+.riga-mov .quanto .esce { color:var(--text); }
+.riga-mov .quanto .entra { color:var(--ok, #1a7f45); }
+.riga-mov .non-contab {
+  display:block; font-size:0.6rem; letter-spacing:0.04em; color:var(--warn);
+}
+.riga-mov .freccia { color:var(--muted); display:none; }
+@media (min-width: 760px) { .riga-mov .freccia { display:inline; } .riga-mov .istituto { display:block; } }
+@media (max-width: 759px) { .riga-mov .istituto, .riga-mov .genere > span:last-child { display:none; } }
+.annota .suddivisione { margin-top:0.8rem; border-top:1px solid var(--border); padding-top:0.7rem; }
+.annota .parte { display:flex; gap:0.4rem; margin-bottom:0.35rem; }
+.annota .parte .p-importo { flex:0 0 8rem; }
+.annota .parte .p-categoria { flex:1; min-width:0; }
+
+/* ── La prima pagina ────────────────────────────────────────────────────── */
+.banche { display:flex; gap:0.4rem; overflow-x:auto; padding-bottom:0.3rem; margin-bottom:0.8rem; }
+.banche .scheda {
+  font:inherit; font-size:0.82rem; font-weight:600; white-space:nowrap; cursor:pointer;
+  padding:0.4rem 0.9rem; border-radius:999px; border:1px solid var(--border);
+  background:transparent; color:var(--muted);
+}
+.banche .scheda.viva { background:var(--accent); border-color:var(--accent); color:#fff; }
+
+.allerte { display:grid; gap:0.4rem; margin-bottom:0.9rem; }
+.allerta {
+  display:block; padding:0.55rem 0.8rem; border-radius:8px; text-decoration:none;
+  border:1px solid var(--border); color:var(--text); font-size:0.88rem;
+  border-left-width:4px; border-left-color:var(--accent);
+}
+.allerta b { font-size:1rem; }
+.allerta.err { border-left-color:var(--stop); }
+.allerta.warn { border-left-color:var(--warn); }
+
+.quadro { display:grid; gap:1.2rem; align-items:start; }
+@media (min-width: 760px) { .quadro { grid-template-columns:200px 1fr; } }
+.quadro .disegno { position:relative; display:grid; place-items:center; }
+.quadro .ciambella { width:min(200px, 62vw); height:auto; }
+.quadro .centro { position:absolute; text-align:center; line-height:1.2; }
+.quadro .centro span { display:block; font-size:0.68rem; color:var(--muted); }
+.quadro .centro strong { display:block; font-size:1.05rem; font-variant-numeric:tabular-nums; }
+
+.voce-conto {
+  display:grid; grid-template-columns:0.6rem 1fr auto; gap:0.6rem; align-items:center;
+  padding:0.6rem 0.2rem; border-top:1px solid var(--border); text-decoration:none; color:var(--text);
+}
+@media (min-width: 620px) { .voce-conto { grid-template-columns:0.6rem 1fr 7rem auto; } }
+.voce-conto .pallino { width:0.6rem; height:0.6rem; border-radius:999px; }
+.voce-conto .nomi strong { display:block; font-size:0.92rem; }
+.voce-conto .nomi small { display:block; font-size:0.7rem; color:var(--muted); }
+.voce-conto .istituto { font-size:0.74rem; color:var(--muted); }
+@media (max-width: 619px) { .voce-conto .istituto { display:none; } }
+.voce-conto .saldo { font-variant-numeric:tabular-nums; font-weight:600; white-space:nowrap; }
+
+.carte { display:grid; gap:0.7rem; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); }
+.carta {
+  display:block; padding:0.8rem; border:1px solid var(--border); border-radius:var(--radius);
+  text-decoration:none; color:var(--text); background:var(--carta, #fff);
+}
+.carta .banda { height:1.5rem; border-radius:4px; background:linear-gradient(100deg, #334155, #64748b); margin-bottom:0.6rem; }
+.carta strong { display:block; font-size:0.88rem; }
+.carta .istituto { display:block; font-size:0.72rem; color:var(--muted); margin-bottom:0.4rem; }
+.carta .k { display:block; font-size:0.68rem; color:var(--muted); }
+.carta .v { display:block; font-size:1.05rem; font-weight:600; font-variant-numeric:tabular-nums; }
 button.act:focus-visible, nav.tabs a:focus-visible, .tile:focus-visible, input:focus-visible {
   outline:3px solid var(--accent); outline-offset:2px;
 }
@@ -376,12 +505,12 @@ async function traccia(azione, genere, soggetto, motivo) {
 const dati = {
   rapporti: [], identificativi: [], strumenti: [], documenti: [],
   file: [], copertura: [], attese: [], legami: [], sconosciuti: [],
-  conti: [], movimenti: [], scritture: [], nessi: [],
+  conti: [], movimenti: [], scritture: [], nessi: [], note: [],
 };
 
 async function ricarica() {
   const [rapporti, identificativi, strumenti, documenti, file, copertura, attese, legami, sconosciuti,
-         conti, movimenti, scritture, nessi] =
+         conti, movimenti, scritture, nessi, note] =
     await Promise.all([
       leggi("relationship", "select=*&order=institution_label,display_name"),
       leggi("relationship_identifier", "select=*"),
@@ -396,17 +525,20 @@ async function ricarica() {
       leggi("ledger_transaction", "select=*&order=economic_date.desc"),
       leggi("ledger_posting", "select=*"),
       leggi("transaction_link", "select=*"),
+      leggi("transaction_annotation", "select=*"),
     ]);
   Object.assign(dati, { rapporti, identificativi, strumenti, documenti, file, copertura, attese, legami, sconosciuti,
-    conti, movimenti, scritture, nessi });
+    conti, movimenti, scritture, nessi, note });
 
   // Indici: con qualche migliaio di movimenti, cercare ogni volta a scansione
   // rende la pagina lenta a ogni battuta nel campo di ricerca.
+  indice.perNota = new Map(note.map((n) => [n.transaction_id, n]));
   indice.perMovimento = new Map();
   for (const s of scritture) {
     if (!indice.perMovimento.has(s.transaction_id)) indice.perMovimento.set(s.transaction_id, []);
     indice.perMovimento.get(s.transaction_id).push(s);
   }
+  indice.perTransazione = new Map(movimenti.map((t) => [t.id, t]));
   indice.perConto = new Map(conti.map((c) => [c.id, c]));
   indice.legatiA = new Map();
   for (const l of nessi) {
@@ -538,6 +670,7 @@ const daGuardare = () => dati.file.filter((f) => esitoDi(f).guarda && !f.archive
 const archiviati = () => dati.file.filter((f) => f.archived_at);
 
 function paginaLetture() {
+  const buchi = periodiMancanti();
   const problemi = daGuardare();
   /* Un file archiviato non e' piu' «formato non riconosciuto»: e' un
      documento messo da parte. Continuare a contarlo per il vecchio esito
@@ -605,6 +738,25 @@ function paginaLetture() {
         Ogni file dell'archivio o è nei conti, o non doveva esserci.
       </div>`}
 
+    ${buchi.length ? `
+      <h2>Periodi senza documenti <span class="sub">gli ultimi due anni</span></h2>
+      <div class="avviso warn">
+        <strong>${buchi.length} rapport${buchi.length === 1 ? "o ha" : "i hanno"} dei mesi scoperti.</strong>
+        In quei mesi le spese risultano zero — e non è che non hai speso: è che manca il documento.
+      </div>
+      ${buchi.map((b) => `
+        <div class="card">
+          <h3>${esc(nomeConto(b.conto))}</h3>
+          ${b.mancanti.length ? `
+            <p class="note risk">Nessun movimento in ${b.mancanti.length} mes${b.mancanti.length === 1 ? "e" : "i"},
+            fra periodi che invece ci sono: ${esc(b.mancanti.slice(0, 18).map(meseEsteso).join(", "))}${
+              b.mancanti.length > 18 ? " …" : ""}.</p>` : ""}
+          ${b.fermoDa ? `<p class="note">L'ultimo movimento è di ${esc(meseEsteso(b.fermoDa))}.
+            Se il conto è chiuso o fermo va bene così; se non lo è, manca l'ultimo estratto.</p>` : ""}
+        </div>`).join("")}
+    ` : `<div class="avviso ok"><strong>Nessun periodo scoperto negli ultimi due anni.</strong>
+         Ogni mese di ogni rapporto ha almeno un movimento.</div>`}
+
     ${archiviati().length ? `
       <h2>Archiviati <span class="sub">non sono estratti conto</span></h2>
       <div class="card">
@@ -659,94 +811,118 @@ async function chiediRielaborazione(idFile) {
 
 /* ── Situazione ─────────────────────────────────────────────────────────── */
 
+let bancaAperta = "";
+
+/* Ogni conto il suo colore: la ciambella e l'elenco devono dire la stessa cosa
+   nello stesso ordine, altrimenti il disegno è decorazione e non informazione. */
+const COLORI = ["#2563eb", "#16a34a", "#f59e0b", "#db2777", "#0891b2", "#7c3aed",
+                "#dc2626", "#65a30d", "#0284c7", "#c026d3", "#ea580c", "#059669"];
+
+/** Una ciambella disegnata a mano: nessuna libreria, nessuna richiesta di rete. */
+function ciambella(fette, totale) {
+  if (!fette.length || totale === 0n) return "";
+  const r = 62, c = 2 * Math.PI * r;
+  let acc = 0;
+  const archi = fette.map((f, i) => {
+    const quota = Number(f.valore) / Number(totale);
+    const lung = Math.max(quota * c - 2, 0);
+    const cerchio = `<circle r="${r}" cx="80" cy="80" fill="none" stroke="${f.colore}"
+      stroke-width="22" stroke-dasharray="${lung} ${c - lung}"
+      stroke-dashoffset="${-acc * c}" transform="rotate(-90 80 80)"><title>${esc(f.nome)}</title></circle>`;
+    acc += quota;
+    return cerchio;
+  }).join("");
+  return `<svg viewBox="0 0 160 160" class="ciambella" role="img" aria-label="ripartizione dei saldi">
+    ${archi}</svg>`;
+}
+
 function paginaSituazione() {
-  const oggiIso = oggi();
   const inRitardo = scadute();
   const nonConfermati = daConfermare();
   const nonLetti = daGuardare();
+  const buchi = periodiMancanti();
 
-  // Copertura: l'intervallo complessivo effettivamente documentato.
-  const inizi = dati.copertura.map((c) => c.start_date).filter(Boolean).sort();
-  const fini  = dati.copertura.map((c) => c.end_date).filter(Boolean).sort();
+  const patrimoniali = dati.conti.filter((c) => ["asset_cash", "asset_securities"].includes(c.kind));
+  const carte = dati.conti.filter((c) => c.kind === "liability_credit");
 
-  const perIstituto = new Map();
-  for (const r of dati.rapporti) {
-    const k = r.institution_label || r.institution_key;
-    if (!perIstituto.has(k)) perIstituto.set(k, []);
-    perIstituto.get(k).push(r);
-  }
+  const perRapporto = new Map(dati.rapporti.map((r) => [r.id, r]));
+  const bancaDi = (c) => {
+    const r = c.relationship_id ? perRapporto.get(c.relationship_id) : null;
+    if (r) return r.institution_label || r.institution_key;
+    return c.name.match(/Intesa|Sella|HYPE|Revolut|Trade Republic|Wise|PayPal|American Express|Contanti/i)?.[0] ?? "Altro";
+  };
+  const banche = [...new Set([...patrimoniali, ...carte].map(bancaDi))].sort();
+  const filtra = (elenco) => bancaAperta ? elenco.filter((c) => bancaDi(c) === bancaAperta) : elenco;
+
+  const conti = filtra(patrimoniali)
+    .map((c, i) => ({ c, valore: saldoConto(c.id), colore: COLORI[i % COLORI.length] }))
+    .sort((a, b) => Number(b.valore - a.valore));
+  const positivi = conti.filter((x) => x.valore > 0n);
+  const totale = positivi.reduce((s, x) => s + x.valore, 0n);
+
+  const leCarte = filtra(carte).map((c) => ({ c, valore: saldoConto(c.id) }));
 
   return `
-    <div class="tiles">
-      <a class="tile" href="#/rapporti"><div class="v">${dati.rapporti.length}</div><div class="k">rapporti individuati</div></a>
-      <a class="tile" href="#/documenti"><div class="v">${dati.documenti.length}</div><div class="k">documenti in archivio</div></a>
-      <a class="tile" href="#/solleciti"><div class="v">${inRitardo.length}</div><div class="k">documenti mancanti</div></a>
-      <a class="tile" href="#/letture"><div class="v">${nonLetti.length}</div><div class="k">documenti non letti</div></a>
-      <a class="tile" href="#/rapporti"><div class="v">${nonConfermati.length}</div><div class="k">da confermare</div></a>
+    <div class="banche">
+      <button class="scheda${bancaAperta === "" ? " viva" : ""}" data-banca="">Tutte le banche</button>
+      ${banche.map((b) => `<button class="scheda${bancaAperta === b ? " viva" : ""}" data-banca="${esc(b)}">${esc(b)}</button>`).join("")}
     </div>
 
-    ${nonLetti.length ? `
-      <h2>Documenti che non entrano nei conti <span class="sub">il formato è cambiato</span></h2>
-      <div class="card">
-        <p>Ci sono <strong>${nonLetti.length}</strong> document${nonLetti.length === 1 ? "o" : "i"} nell'archivio
-        che il programma non riesce a portare nei conti. Finché restano fuori, le spese e le entrate
-        di quei periodi sono <strong>più basse del vero</strong>.</p>
-        <p class="note">Succede: le banche cambiano il formato degli export senza avvisare.
-        Il programma non lo nasconde, lo dice.</p>
-        <div class="actions"><a class="tile" style="padding:0.45rem 0.85rem;border-color:var(--stop);color:var(--stop);font-weight:600;font-size:0.83rem" href="#/letture">Vedi quali sono</a></div>
-      </div>
-    ` : ""}
+    ${nonLetti.length || buchi.length || inRitardo.length || nonConfermati.length ? `
+      <div class="allerte">
+        ${nonLetti.length ? `<a class="allerta err" href="#/letture">
+          <b>${nonLetti.length}</b> document${nonLetti.length === 1 ? "o non è entrato" : "i non sono entrati"} nei conti</a>` : ""}
+        ${buchi.length ? `<a class="allerta warn" href="#/letture">
+          <b>${buchi.length}</b> rapport${buchi.length === 1 ? "o ha" : "i hanno"} mesi senza documenti</a>` : ""}
+        ${inRitardo.length ? `<a class="allerta warn" href="#/solleciti">
+          <b>${inRitardo.length}</b> document${inRitardo.length === 1 ? "o" : "i"} in ritardo</a>` : ""}
+        ${nonConfermati.length ? `<a class="allerta" href="#/rapporti">
+          <b>${nonConfermati.length}</b> rapport${nonConfermati.length === 1 ? "o" : "i"} da confermare</a>` : ""}
+      </div>` : `<div class="avviso ok">Tutto quadra: nessun documento fuori, nessun periodo scoperto.</div>`}
 
-    ${dati.rapporti.length === 0 ? `
-      <h2>Non c'è ancora nulla</h2>
-      ${vuoto("Trascina i documenti nella scheda «Carica», oppure importa l'analisi già svolta dalla scheda «Impostazioni».")}
-    ` : ""}
-
-    ${nonConfermati.length ? `
-      <h2>Prima di ogni conto <span class="sub">servono le conferme</span></h2>
-      <div class="card">
-        <p>Ci sono <strong>${nonConfermati.length}</strong> rapporti proposti dall'analisi e non ancora confermati da te.
-        Finché non li confermi, nessun movimento entra nella contabilità: è voluto.</p>
-        <div class="actions"><a class="tile" style="padding:0.45rem 0.85rem;border-color:var(--accent);color:var(--accent);font-weight:600;font-size:0.83rem" href="#/rapporti">Vai ai rapporti</a></div>
-      </div>
-    ` : ""}
-
-    ${inRitardo.length ? `
-      <h2>Documenti che mancano <span class="sub">${inRitardo.length} in ritardo</span></h2>
-      <div class="card">
-        <p>Per alcuni rapporti il periodo non è coperto da nessun documento. Se una carta è stata sostituita,
-        dillo dalla scheda «Solleciti»: il sistema smette di chiedere quella vecchia.</p>
-        <div class="actions"><a class="tile" style="padding:0.45rem 0.85rem;border-color:var(--warn);color:var(--warn);font-weight:600;font-size:0.83rem" href="#/solleciti">Vedi i solleciti</a></div>
-      </div>
-    ` : ""}
-
-    ${perIstituto.size ? `
-      <h2>Per istituto</h2>
-      ${[...perIstituto.entries()].map(([nome, elenco]) => `
-        <div class="card">
-          <h3>${esc(nome)} <span class="badge mute">${elenco.length} ${elenco.length === 1 ? "rapporto" : "rapporti"}</span></h3>
-          <div class="meta">${elenco.map((r) => esc(r.display_name)).join(" · ")}</div>
-        </div>`).join("")}
-    ` : ""}
-
-    ${inizi.length ? `
-      <h2>Periodo documentato</h2>
-      <div class="card">
-        <div class="meta">
-          <span>Dal ${dataLunga(inizi[0])}</span>
-          <span>Al ${dataLunga(fini[fini.length - 1])}</span>
-          <span>${dati.copertura.length} intervalli</span>
+    <div class="card quadro">
+      <div class="disegno">
+        ${ciambella(positivi.map((x) => ({ nome: nomeConto(x.c), valore: x.valore, colore: x.colore })), totale)}
+        <div class="centro">
+          <span>Liquidità e titoli</span>
+          <strong>${formattaCentesimi(totale)}</strong>
         </div>
-        <div class="note">La copertura non è continua per tutti i rapporti: i buchi sono elencati nella scheda «Solleciti».</div>
       </div>
-    ` : ""}
 
-    <h2>Contabilità <span class="sub">non ancora avviata</span></h2>
-    <div class="card">
-      <p>I movimenti non sono ancora stati estratti dai documenti, quindi non ci sono ancora spese, entrate
-      né saldi da mostrare. È la fase successiva: prima le anagrafiche e le conferme, poi i numeri.</p>
-      <div class="note risk">Nessun importo mostrato qui sarebbe attendibile finché la contabilità non è alimentata.
-      Preferisco non mostrarne piuttosto che mostrarne di provvisori.</div>
+      <div class="elenco">
+        <h2>Conti</h2>
+        ${conti.length ? conti.map((x) => {
+          const [nome, iban] = nomeConto(x.c).split(" · ");
+          return `
+          <a class="voce-conto" href="#/movimenti" data-vai="conto:${esc(x.c.id)}">
+            <span class="pallino" style="background:${x.colore}"></span>
+            <span class="nomi"><strong>${esc(nome)}</strong>${iban ? `<small>${esc(iban)}</small>` : ""}</span>
+            <span class="istituto">${esc(bancaDi(x.c))}</span>
+            <span class="saldo">${formattaCentesimi(x.valore)}</span>
+          </a>`;
+        }).join("") : vuoto("Nessun conto per questa banca.")}
+      </div>
+    </div>
+
+    ${leCarte.length ? `
+      <h2>Carte</h2>
+      <div class="carte">
+        ${leCarte.map((x) => `
+          <a class="carta" href="#/movimenti" data-vai="conto:${esc(x.c.id)}">
+            <div class="banda"></div>
+            <strong>${esc(nomeConto(x.c))}</strong>
+            <span class="istituto">${esc(bancaDi(x.c))}</span>
+            <span class="k">debito da saldare</span>
+            <span class="v">${formattaCentesimi(x.valore < 0n ? -x.valore : 0n)}</span>
+          </a>`).join("")}
+      </div>` : ""}
+
+    <h2>Documenti</h2>
+    <div class="tiles">
+      <a class="tile" href="#/rapporti"><div class="v">${dati.rapporti.length}</div><div class="k">rapporti</div></a>
+      <a class="tile" href="#/documenti"><div class="v">${dati.documenti.length}</div><div class="k">documenti in archivio</div></a>
+      <a class="tile" href="#/movimenti"><div class="v">${dati.movimenti.length}</div><div class="k">movimenti</div></a>
+      <a class="tile" href="#/letture"><div class="v">${nonLetti.length}</div><div class="k">non letti</div></a>
     </div>
   `;
 }
@@ -1850,7 +2026,53 @@ const EVENTO = {
 };
 const ECONOMICI = new Set(["expense", "income"]);
 
-let filtroMov = { conto: "", evento: "", categoria: "", anno: "", cerca: "" };
+/* I filtri sono DUE: quello applicato, che decide che cosa si vede, e la
+   bozza, che è quello che si sta scegliendo. Finché non si preme «Applica»
+   la lista non si muove — altrimenti selezionare cinque conti vorrebbe dire
+   ridisegnare sedicimila movimenti cinque volte, e a metà scelta si vedono
+   risultati che non si è chiesto di vedere. «Annulla» butta la bozza. */
+const filtroVuoto = () => ({
+  verso: "", banche: [], prodotti: [], categorie: [], evento: "",
+  dal: "", al: "", min: "", max: "", cerca: "",
+});
+let filtroMov = filtroVuoto();
+let bozzaMov = filtroVuoto();
+const copiaFiltro = (f) => JSON.parse(JSON.stringify(f));
+
+/* «2 selezionati» dice quanto si è scelto senza occupare tre righe di elenco. */
+/** Che cosa si sta guardando, detto in una riga. */
+function descriviFiltro(f) {
+  const pezzi = [];
+  if (f.verso) pezzi.push({ uscite: "solo uscite", entrate: "solo entrate", interni: "solo giri interni" }[f.verso]);
+  if (f.banche.length) pezzi.push(f.banche.join(", "));
+  if (f.prodotti.length) pezzi.push(`${f.prodotti.length} prodott${f.prodotti.length === 1 ? "o" : "i"}`);
+  if (f.categorie.length) pezzi.push(f.categorie.join(", "));
+  if (f.dal || f.al) pezzi.push(`${f.dal ? `dal ${dataBreve(f.dal)}` : ""}${f.al ? ` al ${dataBreve(f.al)}` : ""}`.trim());
+  if (f.min !== "" || f.max !== "") pezzi.push(`importo ${f.min !== "" ? `da ${f.min} €` : ""}${f.max !== "" ? ` a ${f.max} €` : ""}`.trim());
+  if (f.cerca) pezzi.push(`«${f.cerca}»`);
+  return pezzi.length ? pezzi.join(" · ") : "Nessun filtro: si vede tutto";
+}
+
+function riepilogoScelta(scelti, totale, nomeSingolare) {
+  if (!scelti.length) return `Tutt${nomeSingolare === "banca" ? "e le banche" : nomeSingolare === "prodotto" ? "i i prodotti" : "e le categorie"}`;
+  if (scelti.length === totale) return "Tutti";
+  return scelti.length === 1 ? "1 selezionato" : `${scelti.length} selezionati`;
+}
+
+/** Un menù a tendina con le caselle: nativo, funziona anche col dito. */
+function tendinaMultipla(id, etichetta, voci, scelti, nomeSingolare) {
+  return `
+    <label class="campo"><span>${esc(etichetta)}</span>
+      <details class="tendina" id="${esc(id)}">
+        <summary>${esc(riepilogoScelta(scelti, voci.length, nomeSingolare))}</summary>
+        <div class="voci">
+          ${voci.map((v) => `
+            <label class="voce"><input type="checkbox" value="${esc(v.id)}"${scelti.includes(v.id) ? " checked" : ""}>
+              <span>${esc(v.nome)}</span></label>`).join("")}
+        </div>
+      </details>
+    </label>`;
+}
 let apertoMov = null;
 
 const scrittureDi = (id) => indice.perMovimento.get(id) ?? [];
@@ -1870,16 +2092,53 @@ function paginaMovimenti() {
     return `<h2>Movimenti</h2>${vuoto("Non ci sono ancora movimenti. Si caricano da «Impostazioni».")}`;
   }
 
-  const patrimoniali = dati.conti.filter((c) => ["asset_cash", "liability_credit"].includes(c.kind));
-  const categorie = [...new Set(dati.conti.filter((c) => c.kind === "expense").map((c) => c.category))].filter(Boolean).sort();
-  const anni = [...new Set(dati.movimenti.map((m) => m.economic_date.slice(0, 4)))].sort().reverse();
+  const patrimoniali = dati.conti.filter((c) => ["asset_cash", "liability_credit", "asset_securities"].includes(c.kind));
+  const prodotti = patrimoniali.map((c) => ({ id: c.id, nome: nomeConto(c) }))
+    .sort((a, b) => a.nome.localeCompare(b.nome));
+
+  /* La banca di un prodotto è il rapporto a cui appartiene; per quelli che un
+     rapporto non ce l'hanno ancora, il nome dice già di chi sono. */
+  const perRapporto = new Map(dati.rapporti.map((r) => [r.id, r]));
+  const bancaDi = (c) => {
+    const r = c.relationship_id ? perRapporto.get(c.relationship_id) : null;
+    if (r) return r.institution_label || r.institution_key;
+    const m = c.name.match(/Intesa|Sella|HYPE|Revolut|Trade Republic|Wise|PayPal|American Express|Contanti/i);
+    return m ? m[0] : "Altro";
+  };
+  const banche = [...new Set(patrimoniali.map(bancaDi))].sort()
+    .map((b) => ({ id: b, nome: b }));
+  const prodottiDellaBanca = (nomi) => new Set(
+    patrimoniali.filter((c) => nomi.includes(bancaDi(c))).map((c) => c.id));
+
+  const vociCategorie = [...new Set(dati.conti.filter((c) => ["expense", "income"].includes(c.kind))
+    .map((c) => c.category))].filter(Boolean).sort().map((c) => ({ id: c, nome: c }));
+
+  const tutteLeDate = dati.movimenti.map((m) => m.economic_date).sort();
+  const primoGiorno = tutteLeDate[0] ?? "";
+  const ultimoGiorno = tutteLeDate.at(-1) ?? "";
+
+  const scelti = filtroMov.prodotti.length
+    ? new Set(filtroMov.prodotti)
+    : (filtroMov.banche.length ? prodottiDellaBanca(filtroMov.banche) : null);
+  const minCent = filtroMov.min === "" ? null : BigInt(Math.round(Number(filtroMov.min) * 100));
+  const maxCent = filtroMov.max === "" ? null : BigInt(Math.round(Number(filtroMov.max) * 100));
+  const cerca = filtroMov.cerca.toLowerCase();
 
   const elenco = dati.movimenti.filter((m) => {
     if (filtroMov.evento && m.event_type !== filtroMov.evento) return false;
-    if (filtroMov.anno && !m.economic_date.startsWith(filtroMov.anno)) return false;
-    if (filtroMov.conto && !scrittureDi(m.id).some((s) => s.account_id === filtroMov.conto)) return false;
-    if (filtroMov.categoria && !contiDi(m.id).some((c) => c.category === filtroMov.categoria)) return false;
-    if (filtroMov.cerca && !m.description.toLowerCase().includes(filtroMov.cerca.toLowerCase())) return false;
+    if (filtroMov.dal && m.economic_date < filtroMov.dal) return false;
+    if (filtroMov.al && m.economic_date > filtroMov.al) return false;
+    if (filtroMov.verso === "uscite" && !(ECONOMICI.has(m.event_type) && m.event_type === "expense")) return false;
+    if (filtroMov.verso === "entrate" && m.event_type !== "income") return false;
+    if (filtroMov.verso === "interni" && ECONOMICI.has(m.event_type)) return false;
+    if (scelti && !scrittureDi(m.id).some((s) => scelti.has(s.account_id))) return false;
+    if (filtroMov.categorie.length && !contiDi(m.id).some((c) => filtroMov.categorie.includes(c.category))) return false;
+    if (minCent !== null || maxCent !== null) {
+      const v = importoMov(m.id) < 0n ? -importoMov(m.id) : importoMov(m.id);
+      if (minCent !== null && v < minCent) return false;
+      if (maxCent !== null && v > maxCent) return false;
+    }
+    if (cerca && !m.description.toLowerCase().includes(cerca)) return false;
     return true;
   });
 
@@ -1899,28 +2158,45 @@ function paginaMovimenti() {
   const righe = elenco.slice(0, 250);
 
   return `
-    <div class="card">
-      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.5rem">
-        <select id="m-conto" style="flex:1;min-width:150px">
-          <option value="">Tutti i conti e le carte</option>
-          ${patrimoniali.map((c) => `<option value="${esc(c.id)}"${filtroMov.conto === c.id ? " selected" : ""}>${esc(nomeConto(c))}</option>`).join("")}
-        </select>
-        <select id="m-evento" style="flex:1;min-width:140px">
-          <option value="">Tutti i tipi</option>
-          ${Object.entries(EVENTO).map(([k, v]) => `<option value="${esc(k)}"${filtroMov.evento === k ? " selected" : ""}>${esc(v.nome)}</option>`).join("")}
-        </select>
+    <div class="card filtri">
+      <div class="griglia-filtri">
+        <label class="campo"><span>Entrate / Uscite</span>
+          <select id="m-verso">
+            <option value=""${bozzaMov.verso === "" ? " selected" : ""}>Tutte</option>
+            <option value="uscite"${bozzaMov.verso === "uscite" ? " selected" : ""}>Solo uscite</option>
+            <option value="entrate"${bozzaMov.verso === "entrate" ? " selected" : ""}>Solo entrate</option>
+            <option value="interni"${bozzaMov.verso === "interni" ? " selected" : ""}>Solo giri interni</option>
+          </select>
+        </label>
+
+        ${tendinaMultipla("m-banche", "Banca", banche, bozzaMov.banche, "banca")}
+        ${tendinaMultipla("m-prodotti", "Prodotti", prodotti, bozzaMov.prodotti, "prodotto")}
+        ${tendinaMultipla("m-categorie", "Categorie", vociCategorie, bozzaMov.categorie, "categoria")}
+
+        <label class="campo"><span>Importo</span>
+          <div class="coppia">
+            <input type="number" id="m-min" inputmode="decimal" placeholder="da €" value="${esc(bozzaMov.min)}">
+            <input type="number" id="m-max" inputmode="decimal" placeholder="a €" value="${esc(bozzaMov.max)}">
+          </div>
+        </label>
+
+        <label class="campo"><span>Periodo</span>
+          <div class="coppia">
+            <input type="date" id="m-dal" value="${esc(bozzaMov.dal)}" min="${esc(primoGiorno)}" max="${esc(ultimoGiorno)}">
+            <input type="date" id="m-al" value="${esc(bozzaMov.al)}" min="${esc(primoGiorno)}" max="${esc(ultimoGiorno)}">
+          </div>
+        </label>
+
+        <label class="campo larga"><span>Cerca nella descrizione</span>
+          <input type="text" id="m-cerca" placeholder="nome del negozio, causale, numero…" value="${esc(bozzaMov.cerca)}">
+        </label>
       </div>
-      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.5rem">
-        <select id="m-categoria" style="flex:1;min-width:150px">
-          <option value="">Tutte le categorie</option>
-          ${categorie.map((c) => `<option value="${esc(c)}"${filtroMov.categoria === c ? " selected" : ""}>${esc(c)}</option>`).join("")}
-        </select>
-        <select id="m-anno" style="flex:0 0 110px">
-          <option value="">Ogni anno</option>
-          ${anni.map((a) => `<option value="${esc(a)}"${filtroMov.anno === a ? " selected" : ""}>${esc(a)}</option>`).join("")}
-        </select>
+
+      <div class="azioni-filtri">
+        <button class="act ghost" id="m-annulla">Annulla</button>
+        <span class="note" id="m-stato">${esc(descriviFiltro(filtroMov))}</span>
+        <button class="act" id="m-applica">Applica</button>
       </div>
-      <input type="text" id="m-cerca" placeholder="Cerca nella descrizione…" value="${esc(filtroMov.cerca)}">
     </div>
 
     <div class="tiles">
@@ -1941,23 +2217,280 @@ function paginaMovimenti() {
       const conti = contiDi(m.id).filter((c) => ["asset_cash", "liability_credit"].includes(c.kind));
       const aperto = apertoMov === m.id;
 
+      const [aa, mm, gg] = m.economic_date.split("-");
+      const banca = bancaDelMovimento(m);
+      const cat = categoriaDi(m);
+      const nota = notaDi(m.id);
+      const provvisorio = m.perimeter === "provisional";
+
       return `
-        <div class="card" data-movimento="${esc(m.id)}" style="cursor:pointer">
-          <h3 style="justify-content:space-between">
-            <span style="flex:1;min-width:0">${esc(m.description.slice(0, 90))}</span>
-            <span style="font-variant-numeric:tabular-nums;white-space:nowrap">${formattaCentesimi(imp)}${inValuta(m)}</span>
-          </h3>
-          <div class="meta">
-            <span>${dataBreve(m.economic_date)}</span>
-            <span class="badge ${ev.badge}">${esc(ev.nome)}</span>
-            ${conti.map((c) => `<span>${esc(nomeConto(c))}</span>`).join("")}
-            ${legati.length ? `<span class="badge ok">${legati.length} corrispondenz${legati.length === 1 ? "a" : "e"}</span>` : ""}
+        <div class="riga-mov${aperto ? " aperta" : ""}${provvisorio ? " provvisoria" : ""}" data-movimento="${esc(m.id)}">
+          <div class="testa">
+            <div class="quando"><b>${esc(gg)}</b><span>${esc(MESE_BREVE[Number(mm) - 1] ?? "")}</span>
+              <i>${esc(aa)}</i></div>
+
+            <div class="che-cosa">
+              <strong>${esc(m.description.slice(0, 110))}</strong>
+              <div class="sotto">
+                <span class="conto">${conti.map((c) => esc(nomeConto(c))).join(" · ") || "—"}</span>
+                ${(nota?.labels ?? []).map((l) => `<span class="etichetta">${esc(l)}</span>`).join("")}
+                ${legati.length ? `<span class="badge ok">${legati.length} corrispondenz${legati.length === 1 ? "a" : "e"}</span>` : ""}
+              </div>
+            </div>
+
+            <div class="istituto">${esc(banca.nome)}</div>
+
+            <div class="genere">
+              <span class="tondo">${segno(m)}</span>
+              <span>${esc((cat ?? ev.nome).toUpperCase())}</span>
+            </div>
+
+            <div class="quanto">
+              <b class="${imp < 0n ? "esce" : "entra"}">${formattaCentesimi(imp)}</b>${inValuta(m)}
+              ${provvisorio ? `<span class="non-contab">NON CONTABILIZZATO</span>` : ""}
+            </div>
+
+            <span class="freccia" aria-hidden="true">${aperto ? "▴" : "▾"}</span>
           </div>
           ${aperto ? dettaglioMovimento(m) : ""}
         </div>`;
     }).join("")}
     ${elenco.length > 250 ? `<div class="note">Mostrati i primi 250. Restringi con i filtri.</div>` : ""}
   `;
+}
+
+/* ── Quello che dice lui su un movimento ────────────────────────────────────
+   Il libro mastro si ricostruisce dai documenti a ogni importazione. Le
+   annotazioni no: vivono in una tabella a parte, con la chiave sull'id del
+   movimento. E l'id è ricavato dal codice che la banca dà all'operazione,
+   quindi non cambia mai — le categorie che scegli qui sopravvivono a
+   qualunque reimport. È questa la ragione per cui vale la pena scriverle.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/* ── Il segno di che cosa è ────────────────────────────────────────────────
+   Un elenco di sole parole si legge riga per riga; con un segno accanto si
+   legge a colpo d'occhio. I simboli sono disegnati qui dentro, non scaricati:
+   l'app resta un file solo e funziona anche senza rete. E la banca è scritta
+   col suo nome, non col suo marchio — il marchio non è mio da usare.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+const SEGNO = {
+  ristorazione: "M7 3v8a3 3 0 006 0V3M10 11v10M17 3c-1.5 2-2 4-2 7h4c0-3-.5-5-2-7zM17 10v11",
+  viaggi: "M2 12h20M12 2a15 15 0 010 20M12 2a15 15 0 000 20",
+  salute: "M12 5v14M5 12h14",
+  acquisti: "M6 7h12l-1 13H7L6 7zM9 7V5a3 3 0 016 0v2",
+  "acquisti online": "M3 5h18v11H3zM8 20h8M12 16v4",
+  utenze: "M13 2L4 14h7l-1 8 9-12h-7l1-8z",
+  "utenze e addebiti diretti": "M13 2L4 14h7l-1 8 9-12h-7l1-8z",
+  "bollette e bollettini": "M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2zM9 8h6M9 12h6",
+  imposte: "M12 3v18M6 8h12M8 13h8",
+  "commissioni e imposte bancarie": "M4 20h16M6 20V9M12 20V9M18 20V9M3 9l9-6 9 6",
+  "auto e carburante": "M5 16h14l-1.5-6H6.5L5 16zM7 16v2M17 16v2M8 10V7h8v3",
+  trasporti: "M5 16h14V6H5zM7 19l-1 2M17 19l1 2M8 10h8",
+  "consegne a domicilio": "M3 7h11v8H3zM14 10h4l3 3v2h-7zM7 18a1.5 1.5 0 100-3 1.5 1.5 0 000 3zM17 18a1.5 1.5 0 100-3 1.5 1.5 0 000 3z",
+  abbonamenti: "M4 5h16v14H4zM9 9l6 3-6 3V9z",
+  "casa e famiglia": "M4 11l8-7 8 7M7 10v10h10V10",
+  "pagamenti con bancomat": "M3 6h18v12H3zM3 10h18M6 15h4",
+  "bonifici a terzi": "M4 12h13M13 7l5 5-5 5",
+  "bonifici ricevuti": "M20 12H7M11 7l-5 5 5 5",
+  retribuzioni: "M12 3v18M8 7h6a3 3 0 010 6H9a3 3 0 000 6h7",
+  "dividendi e interessi": "M4 18l5-6 4 4 7-9M20 7h-4M20 7v4",
+  "affitti brevi": "M4 11l8-7 8 7M7 10v10h10V10M10 20v-5h4v5",
+  rimborsi: "M4 12a8 8 0 1116 0M4 12l-2-3M4 12l3-2",
+  contanti: "M3 7h18v10H3zM12 14a2 2 0 100-4 2 2 0 000 4z",
+  titoli: "M4 19h16M7 19V9M12 19V5M17 19v-7",
+  "investimenti e fiduciarie (da confermare)": "M4 19h16M7 19V9M12 19V5M17 19v-7",
+  "servizi e quote": "M12 3l2.5 5 5.5.8-4 3.9.9 5.5L12 15.5 7.1 18.2l.9-5.5-4-3.9L9.5 8z",
+  "spese di lavoro": "M4 8h16v12H4zM9 8V5h6v3",
+  "tempo libero": "M12 3l2.5 5 5.5.8-4 3.9.9 5.5L12 15.5 7.1 18.2l.9-5.5-4-3.9L9.5 8z",
+  istruzione: "M3 8l9-4 9 4-9 4-9-4zM7 11v5c0 1 2 2 5 2s5-1 5-2v-5",
+  "da classificare": "M12 17h.01M9 9a3 3 0 116 0c0 2-3 2-3 5",
+};
+const SEGNO_EVENTO = {
+  internal_transfer: "M8 5l-4 4 4 4M4 9h12M16 19l4-4-4-4M20 15H8",
+  card_settlement: "M3 6h18v12H3zM3 10h18M15 15h3",
+  prepaid_top_up: "M12 20V4M6 10l6-6 6 6",
+};
+
+function segno(m) {
+  const cat = (categoriaDi(m) ?? "").toLowerCase();
+  const d = SEGNO[cat] ?? SEGNO_EVENTO[m.event_type] ?? SEGNO["da classificare"];
+  return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${d}"/></svg>`;
+}
+
+/* La banca si dice col nome. Un marchio non è mio da riprodurre. */
+function bancaDelMovimento(m) {
+  const c = contiDi(m.id).find((x) => ["asset_cash", "liability_credit", "asset_securities"].includes(x.kind));
+  if (!c) return { nome: "—", conto: "" };
+  const r = c.relationship_id ? dati.rapporti.find((x) => x.id === c.relationship_id) : null;
+  const nome = r ? (r.institution_label || r.institution_key)
+    : (c.name.match(/Intesa|Sella|HYPE|Revolut|Trade Republic|Wise|PayPal|American Express|Contanti/i)?.[0] ?? "—");
+  return { nome, conto: nomeConto(c) };
+}
+
+const MESE_BREVE = ["GEN", "FEB", "MAR", "APR", "MAG", "GIU", "LUG", "AGO", "SET", "OTT", "NOV", "DIC"];
+const MESE_ESTESO = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno",
+                     "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"];
+const meseEsteso = (m) => { const [a, k] = m.split("-"); return `${MESE_ESTESO[Number(k) - 1]} ${a}`; };
+
+const notaDi = (id) => indice.perNota?.get(id) ?? null;
+
+/** La categoria che vale: quella scelta da lui, se c'è; altrimenti quella dedotta. */
+function categoriaDi(m) {
+  const n = notaDi(m.id);
+  if (n?.category) return n.category;
+  const c = contiDi(m.id).find((x) => x.kind === "expense" || x.kind === "income");
+  return c?.category ?? null;
+}
+
+/** Le categorie già in uso, per suggerirne di vicine invece di un elenco cieco. */
+function categorieDisponibili() {
+  const dal = dati.conti.filter((c) => ["expense", "income"].includes(c.kind)).map((c) => c.category);
+  const dalle = dati.note.map((n) => n.category);
+  return [...new Set([...dal, ...dalle])].filter(Boolean).sort();
+}
+
+function etichetteEsistenti() {
+  return [...new Set(dati.note.flatMap((n) => n.labels ?? []))].sort();
+}
+
+function pannelloAnnotazione(m) {
+  const n = notaDi(m.id);
+  const attuale = categoriaDi(m);
+  const etichette = n?.labels ?? [];
+  const parti = n?.splits ?? [];
+  const imp = importoMov(m.id);
+  const assoluto = imp < 0n ? -imp : imp;
+
+  return `
+    <div class="card annota" data-annota="${esc(m.id)}">
+      <h3>Come vuoi che sia contato</h3>
+
+      <label class="campo"><span>Categoria</span>
+        <input list="cat-note" class="a-categoria" value="${esc(attuale ?? "")}"
+               placeholder="scrivi o scegli">
+      </label>
+      <datalist id="cat-note">${categorieDisponibili().map((c) => `<option value="${esc(c)}">`).join("")}</datalist>
+      ${n?.category ? `<div class="note">Scelta da te. Senza, sarebbe «${esc(
+        (contiDi(m.id).find((x) => x.kind === "expense" || x.kind === "income")?.category) ?? "—")}».</div>` : ""}
+
+      <label class="campo"><span>Etichette <span class="sub">separate da virgola</span></span>
+        <input list="eti-note" class="a-etichette" value="${esc(etichette.join(", "))}"
+               placeholder="vacanza Bahamas, da rimborsare…">
+      </label>
+      <datalist id="eti-note">${etichetteEsistenti().map((e) => `<option value="${esc(e)}">`).join("")}</datalist>
+
+      <div class="suddivisione">
+        <div class="meta"><strong>Suddividi l'operazione</strong>
+          <span>totale da distribuire: ${formattaCentesimi(assoluto)}</span></div>
+        <div class="parti">
+          ${(parti.length ? parti : []).map((p, i) => `
+            <div class="parte" data-parte="${i}">
+              <input type="number" class="p-importo" step="0.01" value="${(Number(p.minor) / 100).toFixed(2)}" placeholder="importo">
+              <input list="cat-note" class="p-categoria" value="${esc(p.category ?? "")}" placeholder="categoria">
+              <button class="act ghost p-togli" title="togli questa riga">−</button>
+            </div>`).join("")}
+        </div>
+        <div class="actions">
+          <button class="act ghost a-aggiungi">Aggiungi una riga</button>
+          <span class="note a-resto"></span>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="act a-salva">Salva</button>
+        ${n ? `<button class="act ghost a-cancella">Togli le mie modifiche</button>` : ""}
+      </div>
+      <div class="a-esito"></div>
+    </div>`;
+}
+
+async function salvaAnnotazione(box) {
+  const id = box.dataset.annota;
+  const m = dati.movimenti.find((x) => x.id === id);
+  const esito = box.querySelector(".a-esito");
+  const imp = importoMov(id);
+  const assoluto = imp < 0n ? -imp : imp;
+
+  const categoria = box.querySelector(".a-categoria").value.trim();
+  const etichette = box.querySelector(".a-etichette").value
+    .split(",").map((x) => x.trim()).filter(Boolean);
+  const parti = [...box.querySelectorAll(".parte")].map((p) => ({
+    minor: Math.round(Number(p.querySelector(".p-importo").value || 0) * 100),
+    category: p.querySelector(".p-categoria").value.trim(),
+  })).filter((p) => p.minor > 0);
+
+  /* Una suddivisione che non fa il totale non è una suddivisione: è un errore
+     che sposterebbe soldi da nessuna parte a qualche categoria. */
+  if (parti.length) {
+    const somma = BigInt(parti.reduce((s, p) => s + p.minor, 0));
+    if (somma !== assoluto) {
+      esito.innerHTML = `<div class="avviso err">Le parti fanno ${formattaCentesimi(somma)},
+        l'operazione è ${formattaCentesimi(assoluto)}. Mancano ${formattaCentesimi(assoluto - somma)}.</div>`;
+      return;
+    }
+    if (parti.some((p) => !p.category)) {
+      esito.innerHTML = `<div class="avviso err">Ogni parte deve avere una categoria.</div>`;
+      return;
+    }
+  }
+
+  try {
+    await scrivi("transaction_annotation", [{
+      owner: sessione.utente.id, transaction_id: id,
+      category: categoria || null, labels: etichette, splits: parti,
+      updated_at: new Date().toISOString(),
+    }], { fondi: true, conflitto: "owner,transaction_id" });
+    await traccia("transaction.annotated", "ledger_transaction", id,
+      `Categoria «${categoria || "—"}»${etichette.length ? `, etichette: ${etichette.join(", ")}` : ""}${parti.length ? `, divisa in ${parti.length} parti` : ""}`);
+    indice.perNota.set(id, { transaction_id: id, category: categoria || null, labels: etichette, splits: parti });
+    const gia = dati.note.findIndex((x) => x.transaction_id === id);
+    const riga = { transaction_id: id, category: categoria || null, labels: etichette, splits: parti };
+    if (gia >= 0) dati.note[gia] = riga; else dati.note.push(riga);
+    esito.innerHTML = `<div class="avviso ok">Salvato.</div>`;
+    setTimeout(disegna, 500);
+  } catch (e) {
+    esito.innerHTML = `<div class="avviso err">${esc(e.message)}</div>`;
+  }
+}
+
+async function togliAnnotazione(box) {
+  const id = box.dataset.annota;
+  await cancella("transaction_annotation", `transaction_id=eq.${id}`);
+  await traccia("transaction.annotation_removed", "ledger_transaction", id, "Tolte le modifiche manuali");
+  indice.perNota.delete(id);
+  dati.note = dati.note.filter((x) => x.transaction_id !== id);
+  disegna();
+}
+
+/* ── Il dettaglio di un addebito di carta ───────────────────────────────────
+   «Addebito American Express 10.434,81 €» non dice niente. Le spese che lo
+   compongono ci sono: sono quelle della carta fra questo pagamento e il
+   precedente. Non serve un legame scritto per ognuna — basta la finestra fra
+   due pagamenti, che è un fatto.
+   ─────────────────────────────────────────────────────────────────────────── */
+function speseCoperteDalSaldo(m) {
+  if (m.event_type !== "card_settlement") return null;
+  const carta = contiDi(m.id).find((c) => c.kind === "liability_credit");
+  if (!carta) return null;
+
+  const saldi = dati.movimenti
+    .filter((t) => t.event_type === "card_settlement" &&
+      scrittureDi(t.id).some((s) => s.account_id === carta.id))
+    .map((t) => t.economic_date).sort();
+  const k = saldi.indexOf(m.economic_date);
+  const precedente = k > 0 ? saldi[k - 1] : "0000-00-00";
+
+  const spese = dati.movimenti.filter((t) => t.event_type === "expense" &&
+    t.economic_date > precedente && t.economic_date <= m.economic_date &&
+    scrittureDi(t.id).some((s) => s.account_id === carta.id));
+  if (!spese.length) return null;
+
+  const totale = spese.reduce((s, t) => {
+    const v = importoMov(t.id);
+    return s + (v < 0n ? -v : v);
+  }, 0n);
+  return { carta, spese, totale, dal: precedente === "0000-00-00" ? null : precedente };
 }
 
 function dettaglioMovimento(m) {
@@ -2003,9 +2536,74 @@ function dettaglioMovimento(m) {
         : `<div class="note proof">Questo non è una spesa: è denaro che si è spostato fra cose tue.
            Nei totali non compare, ed è voluto.</div>`}
 
+      ${(() => {
+        const d = speseCoperteDalSaldo(m);
+        if (!d) return "";
+        return `
+          <p style="font-size:0.86rem;margin-top:0.9rem"><strong>Che cosa hai pagato con questo addebito:</strong></p>
+          <div class="note proof">${d.spese.length} spese su ${esc(nomeConto(d.carta))}${
+            d.dal ? ` fra il ${dataBreve(d.dal)} e il ${dataBreve(m.economic_date)}` : ""},
+            per ${formattaCentesimi(d.totale)}.</div>
+          <div class="scorri"><table class="dati">
+            <thead><tr><th>Data</th><th>Dove</th><th class="num">Importo</th></tr></thead>
+            <tbody>${d.spese.slice(0, 120).map((t) => `
+              <tr><td>${dataBreve(t.economic_date)}</td>
+                  <td>${esc(t.description.slice(0, 70))}${inValuta(t)}</td>
+                  <td class="num">${formattaCentesimi(importoMov(t.id))}</td></tr>`).join("")}
+            </tbody>
+          </table></div>
+          ${d.spese.length > 120 ? `<div class="note">Mostrate le prime 120 di ${d.spese.length}.</div>` : ""}`;
+      })()}
+
       ${catena ? `<p style="font-size:0.86rem;margin-top:0.7rem"><strong>Dove porta:</strong></p>${catena}`
-        : `<div class="note">Nessuna corrispondenza trovata per questo movimento.</div>`}
+        : ""}
+
+      ${pannelloAnnotazione(m)}
     </div>`;
+}
+
+/* ── I periodi che mancano ──────────────────────────────────────────────────
+   Di un conto non si hanno per forza tutti gli anni, e va bene. Ma un mese
+   VUOTO in mezzo a due mesi pieni non è un mese tranquillo: è un mese di cui
+   manca il documento. Sugli ultimi due anni quel buco va detto, perché in
+   quei mesi le spese risultano zero e sembrano zero davvero.
+   ─────────────────────────────────────────────────────────────────────────── */
+function periodiMancanti() {
+  const oggi = new Date().toISOString().slice(0, 7);
+  const meno = (mese, n) => {
+    const [a, m] = mese.split("-").map(Number);
+    const t = new Date(Date.UTC(a, m - 1 - n, 1));
+    return t.toISOString().slice(0, 7);
+  };
+  const limite = meno(oggi, 23);
+
+  const buchi = [];
+  for (const c of dati.conti.filter((x) => ["asset_cash", "liability_credit"].includes(x.kind))) {
+    /* perMovimento tiene le SCRITTURE di un movimento, non il movimento:
+       cercarci dentro la data restituiva undefined e la pagina non si
+       disegnava più. Il movimento sta in dati.movimenti. */
+    const mesi = new Set();
+    for (const s of dati.scritture) {
+      if (s.account_id !== c.id) continue;
+      const t = indice.perTransazione.get(s.transaction_id);
+      if (t) mesi.add(t.economic_date.slice(0, 7));
+    }
+    if (mesi.size < 2) continue;
+    const ordinati = [...mesi].sort();
+    const primo = ordinati[0], ultimo = ordinati.at(-1);
+
+    const mancanti = [];
+    let m = primo < limite ? limite : primo;
+    while (m <= ultimo) {
+      if (!mesi.has(m)) mancanti.push(m);
+      const [a, k] = m.split("-").map(Number);
+      m = new Date(Date.UTC(a, k, 1)).toISOString().slice(0, 7);
+    }
+    // Un conto fermo da un pezzo non è un buco: è un conto fermo.
+    const fermoDa = ultimo < meno(oggi, 2) ? ultimo : null;
+    if (mancanti.length || fermoDa) buchi.push({ conto: c, mancanti, ultimo, fermoDa });
+  }
+  return buchi;
 }
 
 /* ── Analisi ────────────────────────────────────────────────────────────────
@@ -2626,6 +3224,40 @@ function collega(p, arg) {
     };
   }
 
+  for (const box of document.querySelectorAll(".annota")) {
+    box.addEventListener("click", (e) => e.stopPropagation());
+    const parti = box.querySelector(".parti");
+    const resto = box.querySelector(".a-resto");
+    const totale = (() => { const v = importoMov(box.dataset.annota); return v < 0n ? -v : v; })();
+    function aggiornaResto() {
+      const somma = [...box.querySelectorAll(".p-importo")]
+        .reduce((s, i) => s + Math.round(Number(i.value || 0) * 100), 0);
+      resto.textContent = somma === 0 ? ""
+        : BigInt(somma) === totale ? "Le parti fanno il totale."
+        : `Mancano ${formattaCentesimi(totale - BigInt(somma))}`;
+    }
+    box.querySelector(".a-aggiungi").onclick = () => {
+      const d = document.createElement("div");
+      d.className = "parte";
+      d.innerHTML = `<input type="number" class="p-importo" step="0.01" placeholder="importo">
+        <input list="cat-note" class="p-categoria" placeholder="categoria">
+        <button class="act ghost p-togli" title="togli questa riga">−</button>`;
+      parti.appendChild(d);
+      d.querySelector(".p-importo").focus();
+    };
+    parti.addEventListener("click", (e) => {
+      if (!e.target.classList.contains("p-togli")) return;
+      e.preventDefault();
+      e.target.closest(".parte").remove();
+      aggiornaResto();
+    });
+    parti.addEventListener("input", aggiornaResto);
+    aggiornaResto();
+    box.querySelector(".a-salva").onclick = () => salvaAnnotazione(box);
+    const via = box.querySelector(".a-cancella");
+    if (via) via.onclick = () => togliAnnotazione(box);
+  }
+
   if (p === "letture") {
     for (const b of document.querySelectorAll("[data-rielabora]"))
       b.onclick = () => chiediRielaborazione(b.dataset.rielabora);
@@ -2691,21 +3323,52 @@ function collega(p, arg) {
     document.getElementById("a-anno").onchange = (e) => { annoAnalisi = e.target.value; disegna(); };
   }
 
+  if (p === "") {
+    for (const b of document.querySelectorAll("[data-banca]"))
+      b.onclick = () => { bancaAperta = b.dataset.banca; disegna(); };
+  }
+
   if (p === "movimenti") {
-    const agg = (campo) => (e) => { filtroMov[campo] = e.target.value; apertoMov = null; disegna(); };
-    for (const [id, campo] of [["m-conto", "conto"], ["m-evento", "evento"],
-                               ["m-categoria", "categoria"], ["m-anno", "anno"]])
-      document.getElementById(id).onchange = agg(campo);
-    const c = document.getElementById("m-cerca");
-    let att;
-    c.oninput = (e) => {
-      clearTimeout(att);
-      const v = e.target.value;
-      att = setTimeout(() => {
-        filtroMov.cerca = v; apertoMov = null; disegna();
-        const q = document.getElementById("m-cerca");
-        q.focus(); q.setSelectionRange(v.length, v.length);
-      }, 350);
+    /* Si scrive sulla BOZZA, non sul filtro: la lista si muove solo con
+       «Applica». Scegliere cinque conti non deve ridisegnare cinque volte
+       sedicimila movimenti. */
+    const semplici = [["m-verso", "verso"], ["m-min", "min"], ["m-max", "max"],
+                      ["m-dal", "dal"], ["m-al", "al"], ["m-cerca", "cerca"]];
+    for (const [id, campo] of semplici) {
+      const el = document.getElementById(id);
+      if (!el) continue;
+      el.oninput = el.onchange = (e) => { bozzaMov[campo] = e.target.value; segnaCambio(); };
+    }
+    for (const [id, campo] of [["m-banche", "banche"], ["m-prodotti", "prodotti"], ["m-categorie", "categorie"]]) {
+      const d = document.getElementById(id);
+      if (!d) continue;
+      d.addEventListener("change", (e) => {
+        if (e.target.type !== "checkbox") return;
+        const scelte = [...d.querySelectorAll("input:checked")].map((x) => x.value);
+        bozzaMov[campo] = scelte;
+        d.querySelector("summary").textContent =
+          scelte.length ? (scelte.length === 1 ? "1 selezionato" : `${scelte.length} selezionati`)
+                        : d.closest("label").querySelector("span").textContent.trim();
+        segnaCambio();
+      });
+    }
+
+    const applica = document.getElementById("m-applica");
+    const stato = document.getElementById("m-stato");
+    function segnaCambio() {
+      if (!applica) return;
+      applica.disabled = JSON.stringify(bozzaMov) === JSON.stringify(filtroMov);
+      if (stato) stato.textContent = applica.disabled
+        ? descriviFiltro(filtroMov) : "Modificato — premi Applica per vedere il risultato";
+    }
+    segnaCambio();
+
+    if (applica) applica.onclick = () => {
+      filtroMov = copiaFiltro(bozzaMov); apertoMov = null; disegna();
+    };
+    const annulla = document.getElementById("m-annulla");
+    if (annulla) annulla.onclick = () => {
+      bozzaMov = filtroVuoto(); filtroMov = filtroVuoto(); apertoMov = null; disegna();
     };
   }
 
@@ -2730,11 +3393,13 @@ function collega(p, arg) {
       e.preventDefault();
       const [che, ...resto] = salto.dataset.vai.split(":");
       const valore = resto.join(":");
-      filtroMov = { conto: "", evento: "", categoria: "", anno: annoAnalisi, cerca: "" };
-      if (che === "conto") filtroMov.conto = valore;
+      filtroMov = filtroVuoto();
+      if (annoAnalisi) { filtroMov.dal = `${annoAnalisi}-01-01`; filtroMov.al = `${annoAnalisi}-12-31`; }
+      if (che === "conto") filtroMov.prodotti = [valore];
       if (che === "evento") filtroMov.evento = valore;
-      if (che === "categoria") filtroMov.categoria = valore;
+      if (che === "categoria") filtroMov.categorie = [valore];
       if (che === "cerca") filtroMov.cerca = valore;
+      bozzaMov = copiaFiltro(filtroMov);
       apertoMov = null;
       location.hash = "#/movimenti";
       return;
