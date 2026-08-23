@@ -188,6 +188,17 @@ details.tendina .voce input { width:1rem; height:1rem; flex:0 0 auto; }
 .riga-mov .che-cosa strong { display:block; font-size:0.92rem; font-weight:600; }
 .riga-mov .che-cosa .sotto { display:flex; flex-wrap:wrap; gap:0.35rem; align-items:center; margin-top:0.15rem; }
 .riga-mov .che-cosa .conto { font-size:0.78rem; color:var(--muted); }
+/* La stringa della banca sotto il nome vero: piccola, ma sempre lì. */
+.riga-mov .che-cosa .grezzo {
+  display:block; font-size:0.72rem; color:var(--muted); margin-top:0.05rem;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.riga-mov .che-cosa .dubbio { font-size:0.78rem; color:var(--warn); font-weight:400; }
+.riga-mov .che-cosa .dubbio.ok { color:var(--ok); }
+.riga-mov .settore {
+  font-size:0.7rem; padding:0.05rem 0.45rem; border-radius:999px;
+  background:var(--brand-chiaro); color:var(--brand); font-weight:600;
+}
 .riga-mov .etichetta {
   font-size:0.7rem; padding:0.05rem 0.4rem; border-radius:999px;
   border:1px solid var(--accent); color:var(--accent);
@@ -673,6 +684,22 @@ async function traccia(azione, genere, soggetto, motivo) {
    nella pagina finché è aperta e spariscono alla chiusura.
    ═══════════════════════════════════════════════════════════════════════════ */
 
+/* ── Chi c'è dietro il nome che scrive la banca ────────────────────────────
+   «CRUMBL DORAL — LINDON» sull'estratto è una catena americana di
+   pasticcerie. Il nome vero sta in cima e la stringa della banca sotto: quella
+   non si butta mai, perché è l'unica cosa che si può confrontare col
+   documento. Se l'identificazione è un'ipotesi, si vede che lo è. */
+function controparteDi(m) {
+  return m.counterparty_key ? indice.perControparte.get(m.counterparty_key) ?? null : null;
+}
+const FIDUCIA = {
+  confermata: { segno: "✓", titolo: "confermata da te", classe: "ok" },
+  certa: { segno: "", titolo: "verificata con una ricerca", classe: "" },
+  probabile: { segno: "≈", titolo: "probabile: l'indizio è forte ma non c'è conferma diretta", classe: "warn" },
+  incerta: { segno: "?", titolo: "incerta: è un'ipotesi", classe: "warn" },
+  "non trovato": { segno: "", titolo: "non identificata", classe: "" },
+};
+
 const dati = {
   rapporti: [], identificativi: [], strumenti: [], documenti: [],
   file: [], copertura: [], attese: [], legami: [], sconosciuti: [],
@@ -681,7 +708,7 @@ const dati = {
 
 async function ricarica() {
   const [rapporti, identificativi, strumenti, documenti, file, copertura, attese, legami, sconosciuti,
-         conti, movimenti, scritture, nessi, note] =
+         conti, movimenti, scritture, nessi, note, controparti] =
     await Promise.all([
       leggi("relationship", "select=*&order=institution_label,display_name"),
       leggi("relationship_identifier", "select=*"),
@@ -697,9 +724,11 @@ async function ricarica() {
       leggi("ledger_posting", "select=*"),
       leggi("transaction_link", "select=*"),
       leggi("transaction_annotation", "select=*"),
+      leggi("controparte", "select=*"),
     ]);
   Object.assign(dati, { rapporti, identificativi, strumenti, documenti, file, copertura, attese, legami, sconosciuti,
-    conti, movimenti, scritture, nessi, note });
+    conti, movimenti, scritture, nessi, note, controparti });
+  indice.perControparte = new Map(controparti.map((c) => [c.chiave, c]));
 
   // Indici: con qualche migliaio di movimenti, cercare ogni volta a scansione
   // rende la pagina lenta a ogni battuta nel campo di ricerca.
@@ -720,7 +749,7 @@ async function ricarica() {
   }
 }
 
-const indice = { perMovimento: new Map(), perConto: new Map(), legatiA: new Map() };
+const indice = { perMovimento: new Map(), perConto: new Map(), legatiA: new Map(), perControparte: new Map() };
 
 const perRapporto = (id) => dati.rapporti.find((r) => r.id === id);
 const scadute = () => dati.attese.filter((a) => a.state === "overdue");
@@ -2459,7 +2488,7 @@ const ECONOMICI = new Set(["expense", "income"]);
    ridisegnare sedicimila movimenti cinque volte, e a metà scelta si vedono
    risultati che non si è chiesto di vedere. «Annulla» butta la bozza. */
 const filtroVuoto = () => ({
-  verso: "", banche: [], prodotti: [], categorie: [], evento: "",
+  verso: "", banche: [], prodotti: [], categorie: [], settori: [], evento: "",
   dal: "", al: "", min: "", max: "", cerca: "",
 });
 let filtroMov = filtroVuoto();
@@ -2478,6 +2507,7 @@ function descriviFiltro(f) {
   if (f.banche.length) pezzi.push(f.banche.join(", "));
   if (f.prodotti.length) pezzi.push(`${f.prodotti.length} prodott${f.prodotti.length === 1 ? "o" : "i"}`);
   if (f.categorie.length) pezzi.push(f.categorie.join(", "));
+  if (f.settori?.length) pezzi.push(f.settori.join(", "));
   if (f.dal || f.al) pezzi.push(`${f.dal ? `dal ${dataBreve(f.dal)}` : ""}${f.al ? ` al ${dataBreve(f.al)}` : ""}`.trim());
   if (f.min !== "" || f.max !== "") pezzi.push(`importo ${f.min !== "" ? `da ${f.min} €` : ""}${f.max !== "" ? ` a ${f.max} €` : ""}`.trim());
   if (f.cerca) pezzi.push(`«${f.cerca}»`);
@@ -2544,6 +2574,16 @@ function paginaMovimenti() {
   const vociCategorie = [...new Set(dati.conti.filter((c) => ["expense", "income"].includes(c.kind))
     .map((c) => c.category))].filter(Boolean).sort().map((c) => ({ id: c, nome: c }));
 
+  /* I settori che esistono davvero nei dati, con quante controparti ciascuno:
+     un elenco di sessanta voci in ordine alfabetico è inutilizzabile, uno con
+     accanto il numero si legge. */
+  const contaSettori = new Map();
+  for (const c of dati.controparti ?? [])
+    if (c.settore && c.settore !== "non determinato")
+      contaSettori.set(c.settore, (contaSettori.get(c.settore) ?? 0) + 1);
+  const vociSettori = [...contaSettori.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([s, n]) => ({ id: s, nome: `${s} (${n})` }));
+
   const tutteLeDate = dati.movimenti.map((m) => m.economic_date).sort();
   const primoGiorno = tutteLeDate[0] ?? "";
   const ultimoGiorno = tutteLeDate.at(-1) ?? "";
@@ -2564,6 +2604,12 @@ function paginaMovimenti() {
     if (filtroMov.verso === "interni" && ECONOMICI.has(m.event_type)) return false;
     if (scelti && !scrittureDi(m.id).some((s) => scelti.has(s.account_id))) return false;
     if (filtroMov.categorie.length && !contiDi(m.id).some((c) => filtroMov.categorie.includes(c.category))) return false;
+    /* Il settore è più fine della categoria: «utenze» dice poco, «energia
+       elettrica» si può cercare. Sta sulla controparte, non sul movimento. */
+    if (filtroMov.settori?.length) {
+      const cp = controparteDi(m);
+      if (!cp || !filtroMov.settori.includes(cp.settore)) return false;
+    }
     if (minCent !== null || maxCent !== null) {
       const v = importoMov(m.id) < 0n ? -importoMov(m.id) : importoMov(m.id);
       if (minCent !== null && v < minCent) return false;
@@ -2607,6 +2653,7 @@ function paginaMovimenti() {
         ${tendinaMultipla("m-banche", "Banca", banche, bozzaMov.banche, "banca")}
         ${tendinaMultipla("m-prodotti", "Prodotti", prodotti, bozzaMov.prodotti, "prodotto")}
         ${tendinaMultipla("m-categorie", "Categorie", vociCategorie, bozzaMov.categorie, "categoria")}
+        ${vociSettori.length ? tendinaMultipla("m-settori", "Settore", vociSettori, bozzaMov.settori, "settore") : ""}
 
         <label class="campo"><span>Importo</span>
           <div class="coppia">
@@ -2665,8 +2712,21 @@ function paginaMovimenti() {
               <i>${esc(aa)}</i></div>
 
             <div class="che-cosa">
-              <strong>${esc(m.description.slice(0, 110))}</strong>
+              ${(() => {
+                const cp = controparteDi(m);
+                if (!cp || cp.fiducia === "non trovato")
+                  return `<strong>${esc(m.description.slice(0, 110))}</strong>`;
+                const f = FIDUCIA[cp.corretta_da_lui ? "confermata" : cp.fiducia] ?? FIDUCIA.certa;
+                return `<strong>${esc(cp.nome)}${f.segno
+                  ? ` <span class="dubbio ${f.classe}" title="${esc(f.titolo)}">${f.segno}</span>` : ""}</strong>
+                  <span class="grezzo" title="Come lo scrive la banca">${esc(m.description.slice(0, 110))}</span>`;
+              })()}
               <div class="sotto">
+                ${(() => {
+                  const cp = controparteDi(m);
+                  return cp?.settore && cp.settore !== "non determinato"
+                    ? `<span class="settore">${esc(cp.settore)}</span>` : "";
+                })()}
                 <span class="conto">${conti.map((c) => esc(nomeConto(c))).join(" · ") || "—"}</span>
                 ${(nota?.labels ?? []).map((l) => `<span class="etichetta">${esc(l)}</span>`).join("")}
                 ${legati.length ? `<span class="badge ok">${legati.length} corrispondenz${legati.length === 1 ? "a" : "e"}</span>` : ""}
@@ -3945,7 +4005,8 @@ function collega(p, arg) {
       if (!el) continue;
       el.oninput = el.onchange = (e) => { bozzaMov[campo] = e.target.value; segnaCambio(); };
     }
-    for (const [id, campo] of [["m-banche", "banche"], ["m-prodotti", "prodotti"], ["m-categorie", "categorie"]]) {
+    for (const [id, campo] of [["m-banche", "banche"], ["m-prodotti", "prodotti"],
+                               ["m-categorie", "categorie"], ["m-settori", "settori"]]) {
       const d = document.getElementById(id);
       if (!d) continue;
       d.addEventListener("change", (e) => {
