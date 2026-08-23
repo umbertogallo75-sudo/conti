@@ -1812,6 +1812,51 @@ function barra(parte, tutto, colore = "var(--accent)") {
     <i style="display:block;height:100%;width:${Math.min(q, 100).toFixed(1)}%;background:${colore}"></i></div>`;
 }
 
+/**
+ * Uscite classificate come spesa che hanno una gemella in entrata su un altro
+ * conto: candidate a essere trasferimenti, non spese.
+ *
+ * Il caso vero: una carta ricarica un portafoglio, che ricarica un'altra
+ * carta. Ogni anello ha lo stesso importo. Se un anello qualsiasi resta
+ * «spesa», il denaro compare due volte — e con tre anelli, tre volte.
+ */
+function possibiliTrasferimenti(movimenti) {
+  const PATRIMONIALI = new Set(["asset_cash", "liability_credit"]);
+  const gamba = (t, verso) => (indice.perMovimento.get(t.id) ?? []).find((s) => {
+    const c = indice.perConto.get(s.account_id);
+    return c && PATRIMONIALI.has(c.kind) &&
+      (verso === "uscita" ? BigInt(s.amount_minor) < 0n : BigInt(s.amount_minor) > 0n);
+  });
+  const giorno = (d) => Date.parse(d + "T00:00:00Z") / 86400000;
+
+  // Le entrate, indicizzate per importo: senza indice sarebbero milioni di
+  // confronti e la pagina si bloccherebbe.
+  const perImporto = new Map();
+  for (const t of movimenti) {
+    const e = gamba(t, "entrata");
+    if (!e) continue;
+    const k = e.amount_minor;
+    if (!perImporto.has(k)) perImporto.set(k, []);
+    perImporto.get(k).push({ t, conto: indice.perConto.get(e.account_id) });
+  }
+
+  const fuori = [];
+  for (const t of movimenti) {
+    if (t.event_type !== "expense") continue;
+    const u = gamba(t, "uscita");
+    if (!u) continue;
+    const importo = -BigInt(u.amount_minor);
+    const contoUscita = indice.perConto.get(u.account_id);
+    const gemelle = (perImporto.get(importo.toString()) ?? []).filter((x) =>
+      x.conto?.id !== contoUscita?.id &&
+      Math.abs(giorno(x.t.economic_date) - giorno(t.economic_date)) <= 6);
+    if (!gemelle.length) continue;
+    fuori.push({ t, importo, da: contoUscita?.name ?? "—",
+      a: gemelle[0].conto?.name ?? "—", quando: gemelle[0].t.economic_date });
+  }
+  return fuori.sort((a, b) => b.importo > a.importo ? 1 : -1);
+}
+
 function paginaAnalisi() {
   if (!dati.movimenti.length) {
     return `<h2>Analisi</h2>${vuoto("Non ci sono ancora movimenti da analizzare.")}`;
@@ -1929,6 +1974,44 @@ function paginaAnalisi() {
       <div class="note proof">Questi importi non compaiono nelle spese, ed è voluto: sono lo stesso denaro
       visto due volte. Se comparissero, la spesa risulterebbe più che raddoppiata.</div>
     </div>
+
+    ${(() => {
+      /* Le uscite che potrebbero non essere spese ma trasferimenti.
+         Una ricarica di una carta con un'altra carta, o di un portafoglio
+         con una carta, appare come uscita da una parte e entrata dall'altra:
+         lo STESSO importo, a pochi giorni. Se l'uscita resta classificata
+         come spesa, quel denaro viene contato due volte.
+         Il sistema NON decide da solo: propone, e la conferma è tua. Una
+         fusione sbagliata fa più danno di una mancata. */
+      const sospetti = possibiliTrasferimenti(movimenti);
+      if (!sospetti.length) return "";
+      const tot = sospetti.reduce((s, x) => s + x.importo, 0n);
+      return `
+        <h2>Potrebbero non essere spese <span class="sub">${sospetti.length} da verificare</span></h2>
+        <div class="card">
+          <p>Queste uscite hanno, entro pochi giorni, un'entrata di <strong>importo identico</strong>
+          su un altro tuo conto. Potrebbero essere trasferimenti travestiti da spesa — la ricarica
+          di una carta con un'altra carta, o di un portafoglio.</p>
+          <div class="meta"><span>valore complessivo <strong>${formattaCentesimi(tot)}</strong></span>
+            <span>${speseTot === 0n ? "0" : (Number(tot * 1000n / speseTot) / 10).toFixed(2)}% delle spese</span></div>
+          <div class="note risk">Non le ho riclassificate da sola: un importo uguale a pochi giorni di
+          distanza è un indizio, non una prova. Una commissione di 0,80 € che coincide con un movimento
+          di 0,80 € su PayPal resta una commissione.</div>
+        </div>
+        ${sospetti.slice(0, 25).map((x) => `
+          <div class="card" data-vai="cerca:${esc(x.t.description.slice(0, 20))}" style="cursor:pointer">
+            <h3 style="justify-content:space-between">
+              <span>${esc(x.t.description.slice(0, 70))}</span>
+              <span style="font-variant-numeric:tabular-nums">${formattaCentesimi(x.importo)}</span></h3>
+            <div class="meta">
+              <span>${dataBreve(x.t.economic_date)}</span>
+              <span>${esc(x.da)} → ${esc(x.a)}</span>
+              <span>entrata il ${dataBreve(x.quando)}</span>
+            </div>
+          </div>`).join("")}
+        ${sospetti.length > 25 ? `<div class="note">Mostrati i primi 25 di ${sospetti.length}.</div>` : ""}
+      `;
+    })()}
 
     <h2>I conti e le carte</h2>
     ${patrimoniali.map((c) => {
