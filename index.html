@@ -458,6 +458,25 @@ table.dati td.num { text-align:right; }
       <input type="password" id="password" autocomplete="current-password" required></label>
     <button class="act" type="submit" id="pulsante-accesso" style="width:100%">Entra</button>
   </form>
+  <p class="sotto" style="margin-top:1rem;text-align:center">
+    <a href="#" id="scordata">Non ricordo la parola d'accesso</a>
+  </p>
+</div>
+
+<!-- Reimpostare la parola d'accesso, arrivandoci dal link ricevuto per posta.
+     Il link porta con sé un gettone valido una volta sola: da lì si può solo
+     scegliere una parola nuova, e nient'altro. -->
+<div id="nuova-parola" hidden>
+  <h1>Scegli una nuova parola d'accesso</h1>
+  <p class="sotto">Sei arrivato dal link che ti è stato mandato per posta. Vale una volta sola.</p>
+  <div id="nuova-avviso"></div>
+  <form id="modulo-nuova">
+    <label class="campo"><span>Nuova parola d'accesso</span>
+      <input type="password" id="parola1" autocomplete="new-password" required minlength="8"></label>
+    <label class="campo"><span>Riscrivila</span>
+      <input type="password" id="parola2" autocomplete="new-password" required minlength="8"></label>
+    <button class="act" type="submit" id="pulsante-nuova" style="width:100%">Salva ed entra</button>
+  </form>
 </div>
 
 <div id="app" hidden>
@@ -4170,6 +4189,67 @@ document.getElementById("modulo-accesso").onsubmit = async (e) => {
   }
 };
 
+/* ── Quando la parola d'accesso non si trova ────────────────────────────────
+   Non c'è modo di recuperarla — non è salvata da nessuna parte, ed è giusto
+   così. Se ne sceglie una nuova, e l'unica prova che si è chi si dice è la
+   casella di posta: il link arriva lì e vale una volta sola. */
+document.getElementById("scordata").onclick = async (e) => {
+  e.preventDefault();
+  const avviso = document.getElementById("accesso-avviso");
+  const posta = document.getElementById("email").value.trim();
+  if (!posta) {
+    avviso.innerHTML = `<div class="avviso err">Scrivi prima il tuo indirizzo di posta qui sopra.</div>`;
+    document.getElementById("email").focus();
+    return;
+  }
+  avviso.innerHTML = `<div class="avviso">Mando il link…</div>`;
+  try {
+    const r = await fetch(`${BASE}/auth/v1/recover`, {
+      method: "POST",
+      headers: { apikey: ANON, "content-type": "application/json" },
+      body: JSON.stringify({ email: posta, gotrue_meta_security: {},
+        redirect_to: location.origin + location.pathname }),
+    });
+    /* Supabase risponde 200 anche se quell'indirizzo non esiste: è voluto,
+       altrimenti chiunque potrebbe scoprire chi ha un accesso. */
+    if (!r.ok) throw new Error(`${r.status} — ${(await r.text()).slice(0, 160)}`);
+    avviso.innerHTML = `<div class="avviso ok">Se quell'indirizzo ha un accesso, fra poco ricevi
+      una mail con un link. Aprila su questo stesso dispositivo: da lì scegli la parola nuova.</div>`;
+  } catch (err) {
+    avviso.innerHTML = `<div class="avviso err">Non sono riuscito a mandarlo: ${esc(err.message)}</div>`;
+  }
+};
+
+document.getElementById("modulo-nuova").onsubmit = async (e) => {
+  e.preventDefault();
+  const b = document.getElementById("pulsante-nuova");
+  const avviso = document.getElementById("nuova-avviso");
+  const a = document.getElementById("parola1").value, due = document.getElementById("parola2").value;
+  if (a !== due) {
+    avviso.innerHTML = `<div class="avviso err">Le due non coincidono.</div>`;
+    return;
+  }
+  b.disabled = true; b.textContent = "Salvo…";
+  try {
+    const r = await fetch(`${BASE}/auth/v1/user`, {
+      method: "PUT",
+      headers: { apikey: ANON, authorization: `Bearer ${sessione.access_token}`,
+                 "content-type": "application/json" },
+      body: JSON.stringify({ password: a }),
+    });
+    if (!r.ok) throw new Error((await r.text()).slice(0, 200));
+    document.getElementById("parola1").value = "";
+    document.getElementById("parola2").value = "";
+    document.getElementById("nuova-parola").hidden = true;
+    location.hash = "#/";
+    await mostraApp();
+  } catch (err) {
+    avviso.innerHTML = `<div class="avviso err">${esc(err.message)}</div>`;
+  } finally {
+    b.disabled = false; b.textContent = "Salva ed entra";
+  }
+};
+
 document.getElementById("aggiorna").onclick = async () => {
   const b = document.getElementById("aggiorna");
   b.disabled = true; b.textContent = "…";
@@ -4179,8 +4259,46 @@ document.getElementById("aggiorna").onclick = async () => {
 
 window.addEventListener("hashchange", () => { if (sessione) disegna(); });
 
+/* Il link ricevuto per posta torna qui con il gettone nella parte dopo il
+   cancelletto — che è anche il posto dove questa app tiene la pagina corrente.
+   Va letto e ripulito subito, altrimenti il router lo scambia per un indirizzo
+   e il gettone resta scritto nella barra. */
+function arrivoDalLink() {
+  const h = location.hash.startsWith("#") ? location.hash.slice(1) : "";
+  if (!h.includes("access_token=")) return null;
+  const p = new URLSearchParams(h);
+  const gettone = p.get("access_token"), tipo = p.get("type");
+  if (!gettone) return null;
+  history.replaceState(null, "", location.pathname);
+  return { gettone, ricambio: p.get("refresh_token"), tipo,
+           durata: Number(p.get("expires_in") ?? 3600) };
+}
+
+const dalLink = arrivoDalLink();
 caricaSessione();
-if (!sessione) {
+
+if (dalLink) {
+  /* Si entra con quel gettone e si mostra soltanto la scelta della parola
+     nuova: da un link di recupero non si fa altro. */
+  (async () => {
+    try {
+      const r = await fetch(`${BASE}/auth/v1/user`, {
+        headers: { apikey: ANON, authorization: `Bearer ${dalLink.gettone}` } });
+      if (!r.ok) throw new Error("il link non è più valido");
+      const utente = await r.json();
+      salvaSessione({ access_token: dalLink.gettone, refresh_token: dalLink.ricambio,
+                      scade: Date.now() + dalLink.durata * 1000, utente });
+      if (dalLink.tipo === "recovery") {
+        document.getElementById("accesso").hidden = true;
+        document.getElementById("nuova-parola").hidden = false;
+      } else await mostraApp();
+    } catch (err) {
+      mostraAccesso();
+      document.getElementById("accesso-avviso").innerHTML =
+        `<div class="avviso err">${esc(err.message)}. Chiedine un altro.</div>`;
+    }
+  })();
+} else if (!sessione) {
   mostraAccesso();
 } else if (Date.now() < sessione.scade - 60000) {
   // Il gettone e' ancora buono: non lo si rinnova.
