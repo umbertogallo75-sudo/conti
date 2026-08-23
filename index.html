@@ -605,7 +605,7 @@ table.dati td.num { text-align:right; }
 
 /* La versione del programma. Serve a una cosa sola: accorgersi che quella
    pubblicata è più nuova di quella aperta. Va alzata a ogni pubblicazione. */
-const VERSIONE = 9;
+const VERSIONE = 10;
 
 const BASE = "https://dvkkxqfcxeebqlmtryxi.supabase.co";
 const ANON = "sb_publishable_PIvO1WmssAHUXXwy6nmz_w_W_tPxtNG";
@@ -1664,11 +1664,22 @@ function paginaSituazione() {
         nonConfermati.length && { g: "", via: "#/rapporti", n: nonConfermati.length,
           testo: `rapport${nonConfermati.length === 1 ? "o" : "i"} da confermare` },
       ].filter(Boolean);
+
+      /* Lo scarto fra quello che i documenti dicono e quello che si riesce a
+         ricostruire. Prima spariva dentro il saldo di partenza: adesso ha un
+         conto suo, e se non è zero lo si dice qui. Piccolo o grande, è la
+         misura di quanto ci si può fidare del resto. */
+      const diff = dati.conti.find((c) => c.name === "Differenza non spiegata");
+      const quanto = diff ? saldoConto(diff.id) : 0n;
+      if (quanto !== 0n)
+        voci.unshift({ g: "err", via: "#/movimenti", conto: diff.id, n: "",
+          testo: `<strong>${formattaCentesimi(quanto < 0n ? -quanto : quanto)}</strong> che i documenti non fanno tornare` });
       if (!voci.length)
         return `<div class="avviso ok">Tutto quadra: nessun documento fuori, nessun periodo scoperto.</div>`;
       return `<div class="card allerte">
-        ${voci.map((v) => `<a class="allerta ${v.g}" href="${v.via}">
-          <b>${v.n}</b> ${v.testo}</a>`).join("")}
+        ${voci.map((v) => `<a class="allerta ${v.g}" href="${v.via}"${
+          v.conto ? ` data-vai="conto:${esc(v.conto)}"` : ""}>
+          ${v.n ? `<b>${v.n}</b> ` : ""}${v.testo}</a>`).join("")}
       </div>`;
     })()}
 
@@ -3362,28 +3373,62 @@ async function togliAnnotazione(box) {
    precedente. Non serve un legame scritto per ognuna — basta la finestra fra
    due pagamenti, che è un fatto.
    ─────────────────────────────────────────────────────────────────────────── */
+/* Quali carte scarica un conto di transito. Il pagamento visto dal conto non
+   nomina la carta: il conto paga il transito, e sarà l'estratto della carta a
+   scaricarsi da lì. Il legame però è scritto nei fatti — sono le carte che
+   compaiono nelle scritture che toccano quel transito — e si può seguire. */
+function cartePassateDal(transitoId) {
+  const trovate = new Map();
+  for (const t of dati.movimenti) {
+    const righe = indice.perMovimento.get(t.id) ?? [];
+    if (!righe.some((x) => x.account_id === transitoId)) continue;
+    for (const x of righe) {
+      const c = indice.perConto.get(x.account_id);
+      if (c?.kind === "liability_credit") trovate.set(c.id, c);
+    }
+  }
+  return [...trovate.values()];
+}
+
 function speseCoperteDalSaldo(m) {
   if (m.event_type !== "card_settlement") return null;
-  const carta = contiDi(m.id).find((c) => c.kind === "liability_credit");
-  if (!carta) return null;
 
+  /* Due modi di vedere lo stesso pagamento. Dall'estratto della CARTA la carta
+     c'è, ed è lei. Dall'estratto del CONTO no: lì ci sono il conto e il
+     transito, e la carta va cercata dall'altra parte del transito. Prima
+     questo secondo caso non veniva riconosciuto affatto, e aprire «Pagamento
+     ADUE American Express 10.434,81 €» mostrava due righe di partita doppia e
+     nient'altro — cioè la contabilità, non la risposta alla domanda vera:
+     che cosa ho pagato. */
+  const conti = contiDi(m.id);
+  let carte = conti.filter((c) => c.kind === "liability_credit");
+  if (!carte.length) {
+    const transito = conti.find((c) => naturaDi(c) === "transito");
+    if (transito) carte = cartePassateDal(transito.id);
+  }
+  if (!carte.length) return null;
+  const idCarte = new Set(carte.map((c) => c.id));
+
+  /* La finestra: da questo pagamento indietro fino al precedente della stessa
+     carta. Non serve un legame scritto riga per riga — bastano due date, che
+     sono un fatto. */
+  const tocca = (t) => (indice.perMovimento.get(t.id) ?? []).some((x) => idCarte.has(x.account_id));
   const saldi = dati.movimenti
-    .filter((t) => t.event_type === "card_settlement" &&
-      scrittureDi(t.id).some((s) => s.account_id === carta.id))
+    .filter((t) => t.event_type === "card_settlement" && tocca(t))
     .map((t) => t.economic_date).sort();
   const k = saldi.indexOf(m.economic_date);
   const precedente = k > 0 ? saldi[k - 1] : "0000-00-00";
 
   const spese = dati.movimenti.filter((t) => t.event_type === "expense" &&
-    t.economic_date > precedente && t.economic_date <= m.economic_date &&
-    scrittureDi(t.id).some((s) => s.account_id === carta.id));
+    t.economic_date > precedente && t.economic_date <= m.economic_date && tocca(t))
+    .sort((a, b) => b.economic_date.localeCompare(a.economic_date));
   if (!spese.length) return null;
 
   const totale = spese.reduce((s, t) => {
     const v = importoMov(t.id);
     return s + (v < 0n ? -v : v);
   }, 0n);
-  return { carta, spese, totale, dal: precedente === "0000-00-00" ? null : precedente };
+  return { carte, spese, totale, dal: precedente === "0000-00-00" ? null : precedente };
 }
 
 function dettaglioMovimento(m) {
@@ -3434,9 +3479,22 @@ function dettaglioMovimento(m) {
         if (!d) return "";
         return `
           <p style="font-size:0.86rem;margin-top:0.9rem"><strong>Che cosa hai pagato con questo addebito:</strong></p>
-          <div class="note proof">${d.spese.length} spese su ${esc(nomeConto(d.carta))}${
-            d.dal ? ` fra il ${dataBreve(d.dal)} e il ${dataBreve(m.economic_date)}` : ""},
-            per ${formattaCentesimi(d.totale)}.</div>
+          ${(() => {
+            /* Il totale delle spese e il pagamento non sempre coincidono: un
+               ciclo può portarsi dietro il residuo del mese prima, o un
+               rimborso arrivato dopo. Dirlo è più utile che nasconderlo. */
+            const pagato = (() => { const v = importoMov(m.id); return v < 0n ? -v : v; })();
+            const scarto = d.totale - pagato;
+            return `<div class="note ${scarto === 0n ? "proof" : "risk"}">
+              ${d.spese.length} spese su ${d.carte.map((c) => esc(nomeConto(c))).join(" · ")}${
+                d.dal ? ` fra il ${dataBreve(d.dal)} e il ${dataBreve(m.economic_date)}` : ""},
+              per <strong>${formattaCentesimi(d.totale)}</strong>.
+              ${scarto === 0n ? "Fanno esattamente questo addebito."
+                : `L'addebito è di ${formattaCentesimi(pagato)}: ${
+                    scarto > 0n ? `${formattaCentesimi(scarto)} restano da pagare al ciclo dopo`
+                                : `${formattaCentesimi(-scarto)} venivano dal ciclo prima`}.`}
+            </div>`;
+          })()}
           <div class="scorri"><table class="dati">
             <thead><tr><th>Data</th><th>Dove</th><th class="num">Importo</th></tr></thead>
             <tbody>${d.spese.slice(0, 120).map((t) => `
