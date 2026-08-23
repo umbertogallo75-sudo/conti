@@ -521,7 +521,7 @@ table.dati td.num { text-align:right; }
 
 /* La versione del programma. Serve a una cosa sola: accorgersi che quella
    pubblicata è più nuova di quella aperta. Va alzata a ogni pubblicazione. */
-const VERSIONE = 2;
+const VERSIONE = 3;
 
 const BASE = "https://dvkkxqfcxeebqlmtryxi.supabase.co";
 const ANON = "sb_publishable_PIvO1WmssAHUXXwy6nmz_w_W_tPxtNG";
@@ -1425,7 +1425,7 @@ function paginaSituazione() {
         ${buchi.length ? `<a class="allerta warn" href="#/letture">
           <b>${buchi.length}</b> rapport${buchi.length === 1 ? "o ha" : "i hanno"} mesi senza documenti</a>` : ""}
         ${daRecuperare().length ? `<a class="allerta warn" href="#/letture">
-          <b>${daRecuperare().reduce((t, g) => t + g.mesi, 0)}</b> mesi di estratti da recuperare —
+          <b>${daRecuperare().length}</b> ${daRecuperare().length === 1 ? "rapporto ha" : "rapporti hanno"} estratti da recuperare —
           ${formattaCentesimi(daRecuperare().reduce((t, g) => t + g.totale, 0n), "EUR")} di spesa senza dettaglio</a>` : ""}
         ${inRitardo.length ? `<a class="allerta warn" href="#/solleciti">
           <b>${inRitardo.length}</b> document${inRitardo.length === 1 ? "o" : "i"} in ritardo</a>` : ""}
