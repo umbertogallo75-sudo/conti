@@ -3705,6 +3705,19 @@ function paginaImpostazioni() {
       <div id="esito-alias"></div>
     </div>
 
+    <h2>La parola d'accesso</h2>
+    <div class="card">
+      <p>Cambiala quando vuoi. Non è salvata da nessuna parte — né qui né nel database —
+      e per questo non si può recuperare: si può solo sceglierne una nuova.</p>
+      <label class="campo"><span>Nuova parola d'accesso</span>
+        <input type="password" id="imp-parola1" autocomplete="new-password" minlength="8"
+               placeholder="almeno 8 caratteri"></label>
+      <label class="campo"><span>Riscrivila</span>
+        <input type="password" id="imp-parola2" autocomplete="new-password" minlength="8"></label>
+      <div class="actions"><button class="act" id="salva-parola">Cambia la parola d'accesso</button></div>
+      <div id="esito-parola"></div>
+    </div>
+
     <h2>Accesso</h2>
     <div class="card">
       <h3>${esc(sessione.utente.email)}</h3>
@@ -3886,6 +3899,25 @@ function disegna() {
 
 function collega(p, arg) {
   if (p === "impostazioni") {
+    const bParola = document.getElementById("salva-parola");
+    if (bParola) bParola.onclick = async () => {
+      const esito = document.getElementById("esito-parola");
+      const a = document.getElementById("imp-parola1").value;
+      const due = document.getElementById("imp-parola2").value;
+      if (a.length < 8) { esito.innerHTML = `<div class="avviso err">Serve almeno di otto caratteri.</div>`; return; }
+      if (a !== due) { esito.innerHTML = `<div class="avviso err">Le due non coincidono.</div>`; return; }
+      bParola.disabled = true; bParola.textContent = "Salvo…";
+      try {
+        const r = await chiama("/auth/v1/user", { method: "PUT",
+          headers: { "content-type": "application/json" }, body: JSON.stringify({ password: a }) });
+        if (!r.ok) throw new Error((await r.text()).slice(0, 200));
+        document.getElementById("imp-parola1").value = "";
+        document.getElementById("imp-parola2").value = "";
+        esito.innerHTML = `<div class="avviso ok">Fatto. La prossima volta entri con questa.</div>`;
+      } catch (e) {
+        esito.innerHTML = `<div class="avviso err">${esc(e.message)}</div>`;
+      } finally { bParola.disabled = false; bParola.textContent = "Cambia la parola d'accesso"; }
+    };
     const salva = document.getElementById("salva-alias");
     if (salva) salva.onclick = async () => {
       const box = document.getElementById("esito-alias");
