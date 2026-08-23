@@ -49,10 +49,16 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Il guscio: prima la rete, cosi' gli aggiornamenti arrivano subito; la
-  // copia in cache serve solo quando la rete non c'e'.
+  /* Il guscio: prima la rete, cosi' gli aggiornamenti arrivano subito; la
+     copia in cache serve solo quando la rete non c'e'.
+
+     `cache: "no-store"` non e' un dettaglio. Senza, la richiesta passa per la
+     cache HTTP del browser, e GitHub Pages serve index.html con dieci minuti
+     di validita': per dieci minuti l'app pubblicata era nuova e quella aperta
+     era vecchia, senza che niente lo dicesse. Un aggiornamento che non arriva
+     e' peggio di un aggiornamento che tarda: nessuno lo va a cercare. */
   event.respondWith(
-    fetch(event.request)
+    fetch(event.request, { cache: "no-store" })
       .then((risposta) => {
         if (risposta.ok) {
           const copia = risposta.clone();

@@ -519,6 +519,10 @@ table.dati td.num { text-align:right; }
    ogni riga all'utenza che ha effettuato l'accesso.
    ═══════════════════════════════════════════════════════════════════════════ */
 
+/* La versione del programma. Serve a una cosa sola: accorgersi che quella
+   pubblicata è più nuova di quella aperta. Va alzata a ogni pubblicazione. */
+const VERSIONE = 2;
+
 const BASE = "https://dvkkxqfcxeebqlmtryxi.supabase.co";
 const ANON = "sb_publishable_PIvO1WmssAHUXXwy6nmz_w_W_tPxtNG";
 const BUCKET = "documenti";
@@ -4400,7 +4404,50 @@ document.getElementById("aggiorna").onclick = async () => {
   b.disabled = true; b.textContent = "…";
   try { await ricarica(); disegna(); } catch { /* la pagina resta com'è */ }
   b.disabled = false; b.textContent = "Aggiorna";
+  /* «Aggiorna» deve aggiornare anche il programma, non solo i numeri. Sul
+     telefono non c'è modo di svuotare una cache a mano: se il pulsante non se
+     ne occupa, l'app resta vecchia per sempre. */
+  versioneNuova().then((c) => c && mostraVersioneNuova());
 };
+
+/**
+ * C'è una versione più nuova di quella aperta?
+ *
+ * Si chiede il programma pubblicato saltando ogni cache e si legge il numero
+ * di versione dichiarato dentro. Se è più alto di quello in esecuzione, quello
+ * che si sta guardando è vecchio.
+ */
+async function versioneNuova() {
+  try {
+    const t = await fetch(`./index.html?adesso=${Date.now()}`, { cache: "no-store" }).then((r) => r.text());
+    const m = t.match(/const VERSIONE = (\d+);/);
+    return m && Number(m[1]) > VERSIONE;
+  } catch { return false; }
+}
+
+/** Lo dice, e lascia decidere: ricaricare mentre si legge qualcosa infastidisce. */
+function mostraVersioneNuova() {
+  if (document.getElementById("nuova-versione")) return;
+  const d = document.createElement("div");
+  d.id = "nuova-versione";
+  d.className = "avviso ok";
+  d.style.cssText = "position:fixed;left:1rem;right:1rem;bottom:1rem;z-index:50;cursor:pointer";
+  d.innerHTML = "<strong>C'è una versione nuova dell'app.</strong> Tocca qui per averla.";
+  d.onclick = async () => {
+    d.textContent = "Aggiorno…";
+    try {
+      for (const k of await caches.keys()) await caches.delete(k);
+      const reg = await navigator.serviceWorker?.getRegistration();
+      await reg?.update();
+    } catch { /* si ricarica comunque: la rete ha l'ultima parola */ }
+    location.reload();
+  };
+  document.body.appendChild(d);
+}
+
+/* Al primo caricamento non si chiede subito: la pagina ha già dei numeri da
+   prendere, e un controllo in più la fa partire più lenta. Dopo, sì. */
+setTimeout(() => { if (sessione) versioneNuova().then((c) => c && mostraVersioneNuova()); }, 12000);
 
 window.addEventListener("hashchange", () => { if (sessione) disegna(); });
 
