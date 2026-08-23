@@ -449,6 +449,44 @@ function disegnaTabs(attiva) {
 
 function vuoto(testo) { return `<div class="empty">${esc(testo)}</div>`; }
 
+/* ── Le operazioni fatte in un'altra valuta ─────────────────────────────────
+   L'euro che si vede e' quello addebitato, ed e' giusto che sia quello a
+   contare. Ma «1.080,06 €» a Istanbul non si spiega da solo: era un conto in
+   lire turche. L'asterisco non aggiunge rumore all'elenco — è un carattere —
+   e chi vuole sapere ci passa sopra.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+const NOME_VALUTA = {
+  TRY: "lire turche", USD: "dollari statunitensi", EGP: "sterline egiziane",
+  AED: "dirham degli Emirati", MAD: "dirham marocchini", MUR: "rupie mauriziane",
+  BSD: "dollari delle Bahamas", GBP: "sterline", CHF: "franchi svizzeri",
+  JPY: "yen", CAD: "dollari canadesi", AUD: "dollari australiani",
+  SEK: "corone svedesi", NOK: "corone norvegesi", DKK: "corone danesi",
+  PLN: "zloty", HUF: "fiorini", RON: "lei",
+};
+
+function inValuta(m) {
+  if (!m || !m.original_currency) return "";
+  const v = m.original_currency;
+  const nome = NOME_VALUTA[v] ?? v;
+  const q = m.original_amount_minor != null && m.original_amount_minor !== "0"
+    ? formattaCentesimi(BigInt(m.original_amount_minor), "").trim() : null;
+  const pezzi = [];
+  if (q) pezzi.push(`Operazione di ${q} ${nome} (${v})`);
+  else pezzi.push(`Operazione in ${nome} (${v})`);
+  if (m.fx_rate) pezzi.push(`cambio ${m.fx_rate}`);
+  if (m.fx_fee_minor && m.fx_fee_minor !== "0")
+    pezzi.push(`commissione ${formattaCentesimi(BigInt(m.fx_fee_minor))}`);
+  pezzi.push(m.fx_source === "documento"
+    ? "cambio dichiarato dalla banca sul documento"
+    : m.fx_source === "cambio_storico"
+      ? "convertito al cambio del giorno dell'operazione"
+      : "cambio non disponibile: l'euro qui non è confermato da nessun documento");
+  const titolo = pezzi.join(" · ");
+  const colore = m.fx_source === "non_disponibile" ? "var(--stop)" : "var(--muted)";
+  return `<abbr title="${esc(titolo)}" style="text-decoration:none;cursor:help;color:${colore};font-weight:700">*</abbr>`;
+}
+
 /* ── Che fine ha fatto ogni documento ───────────────────────────────────────
    Le banche cambiano il formato degli export senza dirlo. Quando succede, il
    lettore non va in errore: smette semplicemente di trovare le righe, e il
@@ -481,17 +519,32 @@ const ESITO = {
           + "la banca ha cambiato l'export e serve un lettore nuovo." },
   illeggibile:        { nome: "Illeggibile", badge: "err", guarda: true,
     spiega: "Non se ne ricava testo: può essere la scansione di un foglio, o un file protetto." },
+  archiviato:         { nome: "Messo da parte", badge: "mute", guarda: false,
+    spiega: "L'hai archiviato tu: non è un documento di transazioni." },
   null:               { nome: "Non ancora esaminato", badge: "mute", guarda: false,
     spiega: "Questo file non è ancora passato dal controllo di lettura." },
 };
+/* «Conto Intesa 5044» e' esatto e non dice niente. «Conto di casa» dice tutto.
+   Il nome tecnico non si butta — serve a ritrovare il conto sui documenti —
+   ma passa in secondo piano. */
+const nomeConto = (c) => (c && (c.alias || c.name)) || "—";
+const nomeRapporto = (r) => (r && (r.alias || r.display_name)) || "—";
+
 const esitoDi = (f) => ESITO[f.read_outcome] ?? ESITO.null;
-const daGuardare = () => dati.file.filter((f) => esitoDi(f).guarda);
+/* Un contratto caricato per sbaglio non e' un guasto del lettore: e' un
+   documento che non c'entra. Archiviarlo lo toglie dagli avvisi senza
+   cancellarlo — resta in archivio, con scritto perche' e' li'. */
+const daGuardare = () => dati.file.filter((f) => esitoDi(f).guarda && !f.archived_at);
+const archiviati = () => dati.file.filter((f) => f.archived_at);
 
 function paginaLetture() {
   const problemi = daGuardare();
+  /* Un file archiviato non e' piu' «formato non riconosciuto»: e' un
+     documento messo da parte. Continuare a contarlo per il vecchio esito
+     lasciava l'avviso in cima alla pagina anche dopo averlo tolto. */
   const perEsito = new Map();
   for (const f of dati.file) {
-    const k = f.read_outcome ?? "null";
+    const k = f.archived_at ? "archiviato" : (f.read_outcome ?? "null");
     perEsito.set(k, (perEsito.get(k) ?? 0) + 1);
   }
 
@@ -526,10 +579,15 @@ function paginaLetture() {
             ${f.reprocess_requested_at ? `<span>rielaborazione chiesta il ${dataBreve(f.reprocess_requested_at.slice(0, 10))}</span>` : ""}
           </div>
           <p class="note risk">${esc(e.spiega)}</p>
+          <div class="actions">
+            ${f.reprocess_requested_at
+              ? `<span class="badge ok">rielaborazione chiesta</span>`
+              : `<button class="act ghost" data-rielabora="${esc(f.id)}">Chiedi di riprovare a leggerlo</button>`}
+            <button class="act ghost" data-archivia="${esc(f.id)}">Non è un estratto: archivia</button>
+          </div>
           ${f.reprocess_requested_at
             ? `<div class="note proof">Segnato. Quando il lettore sarà pronto, questo documento rientra da solo:
-               è già nell'archivio, non devi ricaricarlo.</div>`
-            : `<div class="actions"><button class="act ghost" data-rielabora="${esc(f.id)}">Chiedi di riprovare a leggerlo</button></div>`}
+               è già nell'archivio, non devi ricaricarlo.</div>` : ""}
         </div>`;
       }).join("")}
 
@@ -545,7 +603,22 @@ function paginaLetture() {
       <div class="avviso ok">
         <strong>Nessun documento è rimasto fuori senza una ragione dichiarata.</strong>
         Ogni file dell'archivio o è nei conti, o non doveva esserci.
-      </div>`}`;
+      </div>`}
+
+    ${archiviati().length ? `
+      <h2>Archiviati <span class="sub">non sono estratti conto</span></h2>
+      <div class="card">
+        <p class="note">Questi documenti li hai messi da parte tu: restano nell'archivio
+        e non compaiono più fra gli avvisi. Se ti sei sbagliato, puoi rimetterli in lista.</p>
+        <div class="scorri"><table class="dati">
+          <thead><tr><th>Documento</th><th>Messo da parte il</th><th></th></tr></thead>
+          <tbody>${archiviati().map((f) => `
+            <tr><td>${esc(f.display_name)}</td>
+                <td>${dataBreve(f.archived_at.slice(0, 10))}</td>
+                <td><button class="act ghost" data-riprendi="${esc(f.id)}">Rimetti in lista</button></td></tr>`).join("")}
+          </tbody>
+        </table></div>
+      </div>` : ""}`;
 }
 
 function testoRichiesta(problemi) {
@@ -560,6 +633,18 @@ function testoRichiesta(problemi) {
     righe.push(`  ${e.spiega}`);
   }
   return righe.join("\n");
+}
+
+async function archiviaDocumento(idFile, riprendi = false) {
+  const f = dati.file.find((x) => x.id === idFile);
+  if (!f) return;
+  const quando = riprendi ? null : new Date().toISOString();
+  await modifica("source_file", `id=eq.${idFile}`,
+    { archived_at: quando, archived_reason: riprendi ? null : "Non è un documento di transazioni" });
+  await traccia(riprendi ? "document.unarchived" : "document.archived", "source_file", idFile,
+    `${riprendi ? "Rimesso in lista" : "Archiviato"}: «${f.display_name}»`);
+  f.archived_at = quando;
+  disegna();
 }
 
 async function chiediRielaborazione(idFile) {
@@ -877,7 +962,7 @@ function paginaRapporti() {
 
       return `
         <div class="card">
-          <h3>${esc(r.display_name)} ${stato}
+          <h3>${esc(nomeRapporto(r))} ${stato}
             ${r.status === "closed" ? '<span class="badge mute">chiuso</span>' : ""}
             ${peggiore ? `<span class="badge ${peggiore}">${avvisi.length} da rivedere</span>` : ""}</h3>
           <p>${esc(r.institution_label || r.institution_key)} · ${esc(GENERE[r.entity_kind] ?? r.entity_kind)}${
@@ -933,7 +1018,7 @@ function paginaRapporto(id) {
       <a class="tile" style="padding:0.4rem 0.8rem;font-size:0.83rem;display:inline-block" href="#/rapporti">← Tutti i rapporti</a>
     </div>
 
-    <h2>${esc(r.display_name)}</h2>
+    <h2>${esc(nomeRapporto(r))}</h2>
     <div class="card">
       <div class="meta">
         <span>${esc(r.institution_label || r.institution_key)}</span>
@@ -1818,7 +1903,7 @@ function paginaMovimenti() {
       <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.5rem">
         <select id="m-conto" style="flex:1;min-width:150px">
           <option value="">Tutti i conti e le carte</option>
-          ${patrimoniali.map((c) => `<option value="${esc(c.id)}"${filtroMov.conto === c.id ? " selected" : ""}>${esc(c.name)}</option>`).join("")}
+          ${patrimoniali.map((c) => `<option value="${esc(c.id)}"${filtroMov.conto === c.id ? " selected" : ""}>${esc(nomeConto(c))}</option>`).join("")}
         </select>
         <select id="m-evento" style="flex:1;min-width:140px">
           <option value="">Tutti i tipi</option>
@@ -1860,12 +1945,12 @@ function paginaMovimenti() {
         <div class="card" data-movimento="${esc(m.id)}" style="cursor:pointer">
           <h3 style="justify-content:space-between">
             <span style="flex:1;min-width:0">${esc(m.description.slice(0, 90))}</span>
-            <span style="font-variant-numeric:tabular-nums;white-space:nowrap">${formattaCentesimi(imp)}</span>
+            <span style="font-variant-numeric:tabular-nums;white-space:nowrap">${formattaCentesimi(imp)}${inValuta(m)}</span>
           </h3>
           <div class="meta">
             <span>${dataBreve(m.economic_date)}</span>
             <span class="badge ${ev.badge}">${esc(ev.nome)}</span>
-            ${conti.map((c) => `<span>${esc(c.name)}</span>`).join("")}
+            ${conti.map((c) => `<span>${esc(nomeConto(c))}</span>`).join("")}
             ${legati.length ? `<span class="badge ok">${legati.length} corrispondenz${legati.length === 1 ? "a" : "e"}</span>` : ""}
           </div>
           ${aperto ? dettaglioMovimento(m) : ""}
@@ -1891,7 +1976,7 @@ function dettaglioMovimento(m) {
         <div class="meta">
           <span>${dataBreve(altro.economic_date)}</span>
           <span>${formattaCentesimi(importoMov(altro.id))}</span>
-          ${contiDi(altro.id).filter((c) => c.kind !== "expense" && c.kind !== "income").map((c) => `<span>${esc(c.name)}</span>`).join("")}
+          ${contiDi(altro.id).filter((c) => c.kind !== "expense" && c.kind !== "income").map((c) => `<span>${esc(nomeConto(c))}</span>`).join("")}
         </div>
         <div class="note proof">${esc(l.rationale)}</div>
         ${nipoti.map((n) => `<div class="note"><strong>${esc(EVENTO[n.event_type]?.nome ?? n.event_type)}</strong> —
@@ -1905,7 +1990,7 @@ function dettaglioMovimento(m) {
         <thead><tr><th>Conto</th><th>Tipo</th><th class="num">Importo</th></tr></thead>
         <tbody>${s.map((x) => {
           const c = indice.perConto.get(x.account_id);
-          return `<tr><td>${esc(c?.name ?? "—")}</td>
+          return `<tr><td>${esc(nomeConto(c))}</td>
             <td>${esc({ asset_cash: "liquidità", liability_credit: "debito di carta", expense: "spesa",
               income: "entrata", suspense: "da attribuire", asset_securities: "titoli",
               equity_opening: "apertura" }[c?.kind] ?? c?.kind ?? "")}</td>
@@ -2157,9 +2242,10 @@ function paginaAnalisi() {
       const suoi = dati.scritture.filter((s) => s.account_id === c.id).length;
       return `<div class="card" data-vai="conto:${esc(c.id)}" style="cursor:pointer">
         <h3 style="justify-content:space-between">
-          <span>${esc(c.name)}</span>
+          <span>${esc(nomeConto(c))}</span>
           <span style="font-variant-numeric:tabular-nums">${formattaCentesimi(saldo)}</span></h3>
         <div class="meta">
+          ${c.alias ? `<span>${esc(c.name)}</span>` : ""}
           <span>${esc(c.kind === "liability_credit" ? "debito di carta" : "liquidità")}</span>
           <span>${suoi} movimenti</span>
           <span>apri</span></div>
@@ -2320,7 +2406,25 @@ async function scriviInCartella(file) {
 /* ── Impostazioni ───────────────────────────────────────────────────────── */
 
 function paginaImpostazioni() {
+  const suoi = dati.conti
+    .filter((c) => ["asset_cash", "liability_credit", "asset_securities"].includes(c.kind))
+    .sort((a, b) => a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind.localeCompare(b.kind));
+
   return `
+    <h2>Come chiami i tuoi conti</h2>
+    <div class="card">
+      <p>«Conto Intesa 5044» è esatto e non dice niente. Dai a ogni conto e a ogni carta
+      il nome con cui ci pensi: comparirà al suo posto in tutta l'app.
+      Il numero resta scritto sotto — serve a ritrovarlo sui documenti.</p>
+      ${suoi.map((c) => `
+        <label class="campo"><span>${esc(c.name)} <span class="sub">${esc(
+          { asset_cash: "liquidità", liability_credit: "carta di credito", asset_securities: "titoli" }[c.kind])}</span></span>
+          <input type="text" data-alias="${esc(c.id)}" value="${esc(c.alias ?? "")}"
+                 placeholder="per esempio: Conto di casa" maxlength="60"></label>`).join("")}
+      <div class="actions"><button class="act" id="salva-alias">Salva i nomi</button></div>
+      <div id="esito-alias"></div>
+    </div>
+
     <h2>Accesso</h2>
     <div class="card">
       <h3>${esc(sessione.utente.email)}</h3>
@@ -2397,7 +2501,17 @@ async function importaAnalisi(file) {
 
     for (let i = 0; i < totale; i++) {
       const tabella = contenuto.ordine[i];
-      const righe = (contenuto.tabelle[tabella] ?? []).map((r) => ({ ...r, owner: sessione.utente.id }));
+      /* PostgREST rifiuta un lotto in cui le righe non hanno tutte gli stessi
+         campi. Il file omette i campi vuoti per non pesare: qui si rimettono,
+         a null, prima di spedirlo. */
+      const grezze = (contenuto.tabelle[tabella] ?? []).map((r) => ({ ...r, owner: sessione.utente.id }));
+      const chiavi = new Set();
+      for (const r of grezze) for (const k of Object.keys(r)) chiavi.add(k);
+      const righe = grezze.map((r) => {
+        const piena = {};
+        for (const k of chiavi) piena[k] = r[k] === undefined ? null : r[k];
+        return piena;
+      });
       stato.textContent = `${tabella} — ${righe.length} righe`;
       barra.style.width = `${(i / totale) * 100}%`;
       righeTotali += await scrivi(tabella, righe, { fondi: true, conflitto: CONFLITTI[tabella] ?? "" });
@@ -2469,9 +2583,34 @@ function disegna() {
 }
 
 function collega(p, arg) {
+  if (p === "impostazioni") {
+    const salva = document.getElementById("salva-alias");
+    if (salva) salva.onclick = async () => {
+      const box = document.getElementById("esito-alias");
+      try {
+        let cambiati = 0;
+        for (const i of document.querySelectorAll("[data-alias]")) {
+          const c = dati.conti.find((x) => x.id === i.dataset.alias);
+          const nuovo = i.value.trim() || null;
+          if (!c || (c.alias ?? null) === nuovo) continue;
+          await modifica("ledger_account", `id=eq.${c.id}`, { alias: nuovo });
+          c.alias = nuovo; cambiati++;
+        }
+        box.innerHTML = cambiati
+          ? `<div class="avviso ok">${cambiati} nom${cambiati === 1 ? "e" : "i"} aggiornat${cambiati === 1 ? "o" : "i"}.</div>`
+          : `<div class="note">Non è cambiato niente.</div>`;
+        if (cambiati) await traccia("account.renamed", "ledger_account", "alias", `${cambiati} conti rinominati`);
+      } catch (e) { box.innerHTML = `<div class="avviso err">${esc(e.message)}</div>`; }
+    };
+  }
+
   if (p === "letture") {
     for (const b of document.querySelectorAll("[data-rielabora]"))
       b.onclick = () => chiediRielaborazione(b.dataset.rielabora);
+    for (const b of document.querySelectorAll("[data-archivia]"))
+      b.onclick = () => archiviaDocumento(b.dataset.archivia);
+    for (const b of document.querySelectorAll("[data-riprendi]"))
+      b.onclick = () => archiviaDocumento(b.dataset.riprendi, true);
     const copia = document.getElementById("copia-richiesta");
     if (copia) copia.onclick = async () => {
       const t = document.getElementById("richiesta");
