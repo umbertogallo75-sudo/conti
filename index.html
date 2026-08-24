@@ -14,60 +14,150 @@
 <style>
 /* Nessuna informazione affidata al solo colore: ogni stato ha un'etichetta. */
 :root {
-  --bg:#f4f6f8; --surface:#fff; --surface-2:#eef1f4; --border:#dbe0e6;
-  --text:#14171c; --muted:#5a616e;
-  /* Il verde è quello dell'internet banking che gli è familiare: le stesse
-     cose devono avere lo stesso colore che hanno sul sito della banca,
-     altrimenti ogni pagina va riletta da capo. */
-  --brand:#00714a; --brand-2:#009060; --brand-chiaro:#e7f3ee; --su-brand:#fff;
+  /* Il fondo non è un colore: è una luce. Due macchie sfocate dietro il vetro,
+     ferme mentre la pagina scorre — è quello che dà la sensazione che le
+     schede galleggino invece di essere incollate. */
+  --luce-1:#6b6bff; --luce-2:#2fd6c3; --luce-3:#ff7ac4;
+  --bg:#eef1fb;
+  /* Le superfici sono TRASLUCIDE. Il numero dopo la virgola è quanto vetro
+     c'è: troppo poco e il testo diventa illeggibile sopra la macchia
+     colorata, troppo e il vetro non si vede più. 0.68 è il punto in cui il
+     contrasto del testo resta sopra 7:1 e la luce si intravede ancora. */
+  --surface:rgba(255,255,255,0.68);
+  --surface-forte:rgba(255,255,255,0.86);
+  --surface-2:rgba(255,255,255,0.44);
+  --border:rgba(255,255,255,0.75);
+  --bordo-scuro:rgba(23,26,60,0.10);
+  --text:#161a35; --muted:#5b6180;
+  --brand:#4b47d6; --brand-2:#6f6bff; --brand-chiaro:rgba(107,107,255,0.14); --su-brand:#fff;
   --accent:var(--brand);
-  --ok:#0f7a3d; --warn:#8a5a00; --stop:#a3222a; --radius:14px;
-  --ombra:0 1px 2px rgba(16,24,32,0.05), 0 4px 14px rgba(16,24,32,0.05);
+  --ok:#08805a; --warn:#8a5a00; --stop:#c0243a;
+  --radius:22px; --radius-s:14px;
+  --vetro:saturate(180%) blur(22px);
+  /* Tre strati: un filo di luce dentro il bordo alto, un'ombra vicina che
+     stacca la scheda dal fondo, una lontana che le dà peso. */
+  --ombra:inset 0 1px 0 rgba(255,255,255,0.6),
+          0 1px 2px rgba(23,26,60,0.05),
+          0 10px 30px -8px rgba(23,26,60,0.16);
+  --ombra-alta:inset 0 1px 0 rgba(255,255,255,0.7),
+          0 2px 6px rgba(23,26,60,0.07),
+          0 22px 50px -12px rgba(23,26,60,0.26);
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg:#0b0d10; --surface:#14181d; --surface-2:#1b2027; --border:#2a313a;
-    --text:#e8ecf1; --muted:#9aa4b2;
-    --brand:#2fbf85; --brand-2:#57d6a2; --brand-chiaro:#12281f; --su-brand:#06120d;
-    --ok:#4ec97f; --warn:#e0b155; --stop:#ff8a8a;
-    --ombra:0 1px 2px rgba(0,0,0,0.4), 0 6px 18px rgba(0,0,0,0.28);
+    --luce-1:#4b47d6; --luce-2:#0e7f74; --luce-3:#7a2f6a;
+    --bg:#080a16;
+    --surface:rgba(30,33,58,0.62);
+    --surface-forte:rgba(38,42,72,0.82);
+    --surface-2:rgba(255,255,255,0.06);
+    --border:rgba(255,255,255,0.10);
+    --bordo-scuro:rgba(255,255,255,0.08);
+    --text:#eceefb; --muted:#9aa1c4;
+    --brand:#8f8cff; --brand-2:#a9a6ff; --brand-chiaro:rgba(143,140,255,0.18); --su-brand:#0b0d1c;
+    --ok:#41d69f; --warn:#ffc866; --stop:#ff8fa3;
+    --ombra:inset 0 1px 0 rgba(255,255,255,0.07),
+            0 1px 2px rgba(0,0,0,0.4),
+            0 12px 34px -10px rgba(0,0,0,0.6);
+    --ombra-alta:inset 0 1px 0 rgba(255,255,255,0.10),
+            0 2px 8px rgba(0,0,0,0.45),
+            0 26px 60px -14px rgba(0,0,0,0.75);
   }
 }
+/* Chi ha chiesto meno animazioni non deve vedersele lo stesso. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration:0.001ms !important; transition-duration:0.001ms !important; }
+}
 * { box-sizing:border-box; }
+/* Il colore di fondo sta sull'html; il body resta trasparente, altrimenti
+   coprirebbe le macchie di luce che gli stanno dietro. */
+html { background:var(--bg); }
 html,body {
-  margin:0; padding:0; background:var(--bg); color:var(--text);
-  font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  margin:0; padding:0; color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text",
+    system-ui,"Segoe UI Variable","Segoe UI",Roboto,sans-serif;
   font-size:16px; line-height:1.55; -webkit-font-smoothing:antialiased;
   -webkit-text-size-adjust:100%;
 }
+/* Le macchie di luce. Stanno FERME mentre la pagina scorre (fixed): è questo
+   che fa sembrare le schede sospese sopra qualcosa, invece che disegnate su
+   uno sfondo che si muove con loro. Non intercettano il dito. */
+body { background:transparent; }
+body::before {
+  content:""; position:fixed; inset:-25vmax; z-index:0; pointer-events:none;
+  background:
+    radial-gradient(42vmax 42vmax at 12% 6%,  var(--luce-1) 0%, transparent 62%),
+    radial-gradient(38vmax 38vmax at 88% 14%, var(--luce-2) 0%, transparent 60%),
+    radial-gradient(46vmax 46vmax at 62% 92%, var(--luce-3) 0%, transparent 64%);
+  opacity:0.62; filter:blur(20px);
+}
+@media (prefers-color-scheme: dark) { body::before { opacity:0.80; filter:blur(14px); } }
 a { color:var(--accent); }
-.wrap { max-width:860px; margin:0 auto; padding:0 1rem 5rem; }
+/* Tutto il contenuto sta SOPRA la luce. Senza questo, le macchie fisse
+   coprirebbero la pagina invece di stargli dietro. */
+.wrap, header.top, #modulo-accesso { position:relative; z-index:1; }
+.wrap { max-width:1040px; margin:0 auto; padding:0 1rem 5rem; }
+
+/* Il vetro, una volta sola: tutto quello che galleggia usa questo. */
+.vetro, .card, .tile, .riquadro, .testata, nav.sezioni, details.tendina {
+  background:var(--surface);
+  -webkit-backdrop-filter:var(--vetro); backdrop-filter:var(--vetro);
+  border:1px solid var(--border);
+  box-shadow:var(--ombra);
+  border-radius:var(--radius);
+}
+/* Dove il vetro non c'è (browser vecchi, o risparmio energetico) la scheda
+   deve restare leggibile: si rende opaca invece di lasciarla trasparente. */
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))) {
+  .vetro, .card, .tile, .riquadro, .testata, nav.sezioni, details.tendina { background:var(--surface-forte); }
+}
 
 header.top {
-  position:sticky; top:0; z-index:10; background:var(--brand); color:var(--su-brand);
+  position:sticky; top:0; z-index:10; color:var(--text);
+  background:var(--surface);
+  -webkit-backdrop-filter:var(--vetro); backdrop-filter:var(--vetro);
+  border-bottom:1px solid var(--border);
   padding:calc(0.9rem + env(safe-area-inset-top)) 1rem 0.55rem;
 }
-header.top .riga { display:flex; align-items:baseline; gap:0.6rem; max-width:860px; margin:0 auto; }
-header.top h1 { margin:0; font-size:1.05rem; letter-spacing:-0.01em; flex:1; }
-header.top p { margin:0.15rem auto 0; max-width:860px; opacity:0.82; font-size:0.82rem; }
-header.top .act.ghost { color:var(--su-brand); border-color:rgba(255,255,255,0.45); }
+header.top .riga { display:flex; align-items:baseline; gap:0.6rem; max-width:1040px; margin:0 auto; }
+header.top h1 {
+  margin:0; font-size:1.05rem; letter-spacing:-0.02em; font-weight:800; flex:1;
+  background:linear-gradient(100deg, var(--brand), var(--luce-2) 90%);
+  -webkit-background-clip:text; background-clip:text; color:transparent;
+}
+/* Se il ritaglio del testo non funziona, il titolo deve restare visibile:
+   un titolo trasparente su fondo trasparente non lo legge nessuno. */
+@supports not ((-webkit-background-clip:text) or (background-clip:text)) {
+  header.top h1 { color:var(--text); background:none; }
+}
+header.top p { margin:0.15rem auto 0; max-width:1040px; color:var(--muted); font-size:0.82rem; }
+header.top .act.ghost {
+  color:var(--text); border-color:var(--border); background:var(--surface-2);
+  -webkit-backdrop-filter:var(--vetro); backdrop-filter:var(--vetro);
+  border-radius:999px; padding:0.45rem 1rem;
+}
 /* Le linguette vanno a capo, non di lato. Una barra che scorre in orizzontale
    nasconde metà delle voci, e una voce che bisogna cercare scorrendo è una
    voce che non si trova: si vedono tutte, anche se prendono due righe. */
 nav.tabs {
-  display:flex; flex-wrap:wrap; gap:0.3rem; margin:0.7rem auto 0; max-width:860px;
+  display:flex; flex-wrap:wrap; gap:0.3rem; margin:0.7rem auto 0; max-width:1040px;
 }
 nav.tabs a {
-  flex:0 0 auto; text-decoration:none; color:var(--su-brand); padding:0.34rem 0.7rem;
-  border-radius:999px; border:1px solid rgba(255,255,255,0.28); background:rgba(255,255,255,0.1);
-  font-size:0.84rem; white-space:nowrap;
+  flex:0 0 auto; text-decoration:none; color:var(--muted); padding:0.36rem 0.8rem;
+  border-radius:999px; border:1px solid transparent; background:var(--surface-2);
+  font-size:0.84rem; font-weight:600; white-space:nowrap;
+  transition:background 0.18s ease, color 0.18s ease, transform 0.18s ease;
 }
-nav.tabs a[aria-current="page"] { background:var(--su-brand); border-color:var(--su-brand); color:var(--brand); font-weight:600; }
+nav.tabs a:hover { color:var(--text); transform:translateY(-1px); }
+nav.tabs a[aria-current="page"] {
+  background:linear-gradient(180deg, var(--brand-2), var(--brand));
+  border-color:transparent; color:#fff; font-weight:700;
+  box-shadow:0 6px 16px -6px var(--brand);
+}
 nav.tabs a .n {
   display:inline-block; margin-left:0.4rem; padding:0 0.36rem; border-radius:999px;
-  background:rgba(255,255,255,0.2); font-size:0.76rem; font-variant-numeric:tabular-nums;
+  background:var(--brand-chiaro); color:var(--brand); font-size:0.76rem; font-variant-numeric:tabular-nums;
 }
-nav.tabs a[aria-current="page"] .n { background:var(--brand-chiaro); color:var(--brand); }
+nav.tabs a[aria-current="page"] .n { background:rgba(255,255,255,0.28); color:#fff; }
 
 /* Le sezioni dentro «Documenti». Stanno nella pagina, non nella banda verde:
    sono un livello sotto, e si deve vedere che lo sono. */
@@ -99,23 +189,12 @@ nav.sezioni a .n {
   font-variant-numeric:tabular-nums;
 }
 
-/* Al buio la banda verde piena è una lampada: di notte si guarda il telefono
-   a letto. La banda diventa scura, e il verde resta dov'è utile — la scheda
-   accesa e la riga sotto. */
-@media (prefers-color-scheme: dark) {
-  header.top { background:var(--surface); color:var(--text); box-shadow:inset 0 -2px 0 var(--brand); }
-  header.top .act.ghost { color:var(--text); border-color:var(--border); }
-  nav.tabs a { color:var(--text); border-color:var(--border); background:var(--surface-2); }
-  nav.tabs a[aria-current="page"] { background:var(--brand); border-color:var(--brand); color:var(--su-brand); }
-  nav.tabs a .n { background:var(--bg); color:var(--muted); }
-}
+/* La banda in cima è vetro in tutte e due le luci: non c'è più una fascia
+   piena da spegnere al buio. */
 
 h2 { font-size:1rem; margin:1.6rem 0 0.6rem; letter-spacing:-0.01em; }
 h2 .sub { font-weight:400; color:var(--muted); font-size:0.84rem; margin-left:0.4rem; }
-.card {
-  background:var(--surface); border:1px solid var(--border); box-shadow:var(--ombra);
-  border-radius:var(--radius); padding:0.85rem 0.95rem; margin-bottom:0.6rem;
-}
+.card { padding:1rem 1.1rem; margin-bottom:0.7rem; }
 .card h3 { margin:0 0 0.15rem; font-size:0.95rem; display:flex; gap:0.5rem; align-items:baseline; flex-wrap:wrap; }
 .card p { margin:0.3rem 0 0; color:var(--muted); font-size:0.86rem; }
 .card .meta {
@@ -134,9 +213,10 @@ h2 .sub { font-weight:400; color:var(--muted); font-size:0.84rem; margin-left:0.
 .tiles { display:grid; grid-template-columns:repeat(2,1fr); gap:0.55rem; margin-top:0.9rem; }
 @media (min-width:620px){ .tiles{grid-template-columns:repeat(4,1fr)} }
 .tile {
-  background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
-  padding:0.7rem 0.8rem; text-decoration:none; color:inherit; display:block;
+  padding:0.85rem 0.95rem; text-decoration:none; color:inherit; display:block;
+  transition:transform 0.18s cubic-bezier(.2,.8,.2,1), box-shadow 0.18s ease;
 }
+.tile:hover { transform:translateY(-2px); box-shadow:var(--ombra-alta); }
 .tile .v { font-size:clamp(1.05rem, 4.4vw, 1.35rem); font-weight:650;
   font-variant-numeric:tabular-nums; letter-spacing:-0.02em; white-space:nowrap; }
 .tile .k { font-size:0.78rem; color:var(--muted); }
@@ -292,16 +372,74 @@ details.tendina .voce input { width:1rem; height:1rem; flex:0 0 auto; }
   padding:0.4rem 0.9rem; border-radius:999px; border:1px solid var(--border);
   background:transparent; color:var(--muted);
 }
-.banche .scheda.viva { background:var(--accent); border-color:var(--accent); color:#fff; }
+.banche .scheda {
+  background:var(--surface-2); border-color:transparent;
+  -webkit-backdrop-filter:var(--vetro); backdrop-filter:var(--vetro);
+  transition:transform 0.18s cubic-bezier(.2,.8,.2,1), background 0.18s ease, color 0.18s ease;
+}
+.banche .scheda:hover { transform:translateY(-1px); color:var(--text); }
+.banche .scheda.viva {
+  background:linear-gradient(180deg, var(--brand-2), var(--brand));
+  border-color:transparent; color:#fff;
+  box-shadow:0 8px 20px -8px var(--brand);
+}
+
+/* ── I riquadri della prima pagina ────────────────────────────────────────
+   Tutto quello che conta su una schermata sola: quanto c'è, quanto è uscito
+   questo mese, quanto devono ancora le carte, cosa non torna.
+
+   Sul telefono è una colonna sola — impilare è l'unico modo di stare in
+   trecentonovanta punti senza rimpicciolire le cifre. Da 640 punti in su
+   diventano due colonne, da 900 quattro, e il riquadro del patrimonio ne
+   occupa due perché il suo numero è il più lungo di tutti. */
+.bento { display:grid; gap:0.7rem; grid-template-columns:1fr; margin:0.9rem 0; }
+@media (min-width:640px) { .bento { grid-template-columns:repeat(2, minmax(0,1fr)); } }
+@media (min-width:900px) { .bento { grid-template-columns:repeat(4, minmax(0,1fr)); } }
+.bento > * { min-width:0; }
+@media (min-width:640px) { .bento .largo2 { grid-column:span 2; } }
+@media (min-width:900px) { .bento .largo4 { grid-column:span 4; } }
+
+.riquadro {
+  display:flex; flex-direction:column; gap:0.15rem; padding:1rem 1.1rem;
+  text-decoration:none; color:inherit;
+  transition:transform 0.2s cubic-bezier(.2,.8,.2,1), box-shadow 0.2s ease;
+}
+a.riquadro:hover, button.riquadro:hover { transform:translateY(-3px); box-shadow:var(--ombra-alta); }
+.riquadro .etichetta {
+  font-size:0.7rem; letter-spacing:0.08em; text-transform:uppercase;
+  color:var(--muted); font-weight:700;
+}
+.riquadro .cifra {
+  font-size:clamp(1.5rem, 6.6vw, 2rem); font-weight:700; letter-spacing:-0.035em;
+  font-variant-numeric:tabular-nums; line-height:1.1; margin:0.18rem 0 0;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.riquadro.principale .cifra { font-size:clamp(2rem, 9vw, 3.1rem); }
+.riquadro .sotto { font-size:0.8rem; color:var(--muted); margin-top:0.2rem; }
+.riquadro .sotto strong { color:var(--text); font-variant-numeric:tabular-nums; }
+
+/* La strisciolina dei dodici mesi. Non ha assi né numeri: serve a vedere se
+   la linea sale o scende, non a leggerci dei valori. */
+.scia { display:flex; align-items:flex-end; gap:2px; height:34px; margin-top:0.6rem; }
+.scia i {
+  flex:1; min-width:2px; border-radius:3px 3px 1px 1px;
+  background:linear-gradient(180deg, var(--brand-2), var(--brand)); opacity:0.32;
+}
+.scia i.ultimo { opacity:1; }
+
+.riquadro.allarme { border-color:color-mix(in srgb, var(--stop) 45%, transparent); }
+.riquadro.attenzione { border-color:color-mix(in srgb, var(--warn) 45%, transparent); }
+.riquadro .cifra.male { color:var(--stop); }
+.riquadro .cifra.bene { color:var(--ok); }
 
 .card.allerte { padding:0; overflow:hidden; }
 .allerta {
-  display:block; padding:0.62rem 0.9rem; text-decoration:none;
-  border-top:1px solid var(--border); border-left:4px solid var(--accent);
-  color:var(--text); font-size:0.88rem;
+  display:block; padding:0.7rem 1rem; text-decoration:none;
+  border-top:1px solid var(--bordo-scuro); border-left:4px solid var(--accent);
+  color:var(--text); font-size:0.88rem; transition:background 0.16s ease, padding-left 0.16s ease;
 }
 .allerta:first-child { border-top:0; }
-.allerta:hover { background:var(--surface-2); }
+.allerta:hover { background:var(--surface-2); padding-left:1.25rem; }
 .allerta b { font-size:1rem; }
 .allerta.err { border-left-color:var(--stop); }
 .allerta.warn { border-left-color:var(--warn); }
@@ -374,9 +512,22 @@ button.act:focus-visible, nav.tabs a:focus-visible, .tile:focus-visible, input:f
    lo stesso — restavano larghi due centimetri in mezzo a un pannello largo
    venti: il campo «Categoria» del dettaglio di un movimento era uno di quelli. */
 input:not([type=checkbox]):not([type=radio]):not([type=file]), select, textarea {
-  font:inherit; width:100%; padding:0.6rem 0.7rem; border-radius:8px;
-  border:1px solid var(--border); background:var(--surface); color:var(--text);
+  font:inherit; width:100%; padding:0.62rem 0.85rem; border-radius:var(--radius-s);
+  border:1px solid var(--bordo-scuro); background:var(--surface-2); color:var(--text);
+  -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
+  transition:border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
 }
+input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline:none; border-color:var(--brand); background:var(--surface-forte);
+  box-shadow:0 0 0 4px var(--brand-chiaro);
+}
+button.act { border-radius:999px; padding:0.5rem 1.1rem; }
+button.act:not(.ghost):not(.pericolo) {
+  background:linear-gradient(180deg, var(--brand-2), var(--brand)); border-color:transparent;
+  box-shadow:0 8px 20px -8px var(--brand);
+}
+button.act:not([disabled]):hover { transform:translateY(-1px); }
+button.act { transition:transform 0.16s ease, box-shadow 0.16s ease; }
 label.campo { display:block; margin-bottom:0.9rem; font-size:0.84rem; color:var(--muted); }
 label.campo > span { display:block; margin-bottom:0.25rem; color:var(--text); font-weight:600; }
 /* Il tipo del conto è un'informazione di servizio: sta accanto al nome, non
@@ -419,15 +570,12 @@ table.dati td.num { text-align:right; }
    le stesse cose si trovino sempre nello stesso posto.
    ═════════════════════════════════════════════════════════════════════════ */
 
-.testata {
-  background:var(--surface); border:1px solid var(--border); box-shadow:var(--ombra);
-  border-radius:var(--radius); padding:1rem 1.05rem; margin:0.9rem 0 0.9rem;
-}
+.testata { padding:1.1rem 1.2rem; margin:0.9rem 0; }
 .testata .occhiello {
   font-size:0.72rem; letter-spacing:0.07em; text-transform:uppercase; color:var(--muted);
 }
 .testata .grande {
-  font-size:clamp(1.9rem, 8vw, 2.6rem); font-weight:680; letter-spacing:-0.03em;
+  font-size:clamp(2rem, 8.4vw, 2.9rem); font-weight:700; letter-spacing:-0.035em;
   font-variant-numeric:tabular-nums; line-height:1.12; margin:0.1rem 0 0;
 }
 .testata .sotto { color:var(--muted); font-size:0.86rem; margin:0.25rem 0 0; }
@@ -605,7 +753,7 @@ table.dati td.num { text-align:right; }
 
 /* La versione del programma. Serve a una cosa sola: accorgersi che quella
    pubblicata è più nuova di quella aperta. Va alzata a ogni pubblicazione. */
-const VERSIONE = 12;
+const VERSIONE = 13;
 
 const BASE = "https://dvkkxqfcxeebqlmtryxi.supabase.co";
 const ANON = "sb_publishable_PIvO1WmssAHUXXwy6nmz_w_W_tPxtNG";
@@ -1405,8 +1553,11 @@ let bancaAperta = "";
    il conto principale, e vederla del colore dell'app invece che di un blu
    qualunque fa sembrare la pagina una cosa sola. Gli altri restano ben
    distinti fra loro: servono a dire «questo non è quello», non a decorare. */
-const COLORI = ["#00714a", "#2563eb", "#e08700", "#7c3aed", "#0891b2", "#db2777",
-                "#65a30d", "#dc2626", "#0284c7", "#c026d3", "#ea580c", "#0d9488"];
+/* I colori delle fette. Ordinati per distanza fra loro, non per gusto: due
+   spicchi vicini nella ciambella devono restare distinguibili anche stampati
+   in bianco e nero, quindi cambia anche la luminosità, non solo la tinta. */
+const COLORI = ["#5b56e8", "#0fb5a4", "#f0912d", "#d6499a", "#3b82f6", "#8b5cf6",
+                "#0d9488", "#e0603c", "#0ea5e9", "#b45cd6", "#f2b705", "#2dd4bf"];
 
 /** Una ciambella disegnata a mano: nessuna libreria, nessuna richiesta di rete. */
 function ciambella(fette, totale) {
@@ -1682,20 +1833,68 @@ function paginaSituazione() {
     .map((v, i) => ({ ...v, colore: COLORI[i % COLORI.length] }));
   const paypal = dati.conti.find((c) => naturaDi(c) === "passante");
 
+  /* ── Quanto è uscito questo mese, e come sta andando ─────────────────────
+     Il mese "corrente" non è quello dell'orologio: è quello dell'ultimo
+     movimento che ho. Se l'ultimo documento è di luglio, mostrare agosto a
+     zero direbbe una bugia — non che non ho speso, ma che non lo so ancora. */
+  const ultimoGiorno = dati.movimenti.length
+    ? dati.movimenti.reduce((m, t) => (t.economic_date > m ? t.economic_date : m), "0000-00-00")
+    : "";
+  const meseMeno = (ym, k) => {
+    let [a, m] = ym.split("-").map(Number);
+    m -= k; while (m <= 0) { m += 12; a--; }
+    return `${a}-${String(m).padStart(2, "0")}`;
+  };
+  const meseOra = ultimoGiorno.slice(0, 7);
+  /* aggrega() restituisce i mesi già ordinati, come coppie: qui servono a
+     caso, quindi si rimettono in una mappa. */
+  const dodici = meseOra ? new Map(aggrega(`${meseMeno(meseOra, 11)}-01`, ultimoGiorno).mesi) : null;
+  const usciteDi = (ym) => dodici?.get(ym)?.uscite ?? 0n;
+  const scia = meseOra ? Array.from({ length: 12 }, (_, i) => meseMeno(meseOra, 11 - i)) : [];
+  const massimo = scia.reduce((m, ym) => (usciteDi(ym) > m ? usciteDi(ym) : m), 1n);
+  const spesaOra = usciteDi(meseOra);
+  const spesaPrima = usciteDi(meseMeno(meseOra, 1));
+  const MESI_IT = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno",
+    "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"];
+  const nomeMese = (ym) => ym ? `${MESI_IT[+ym.slice(5, 7) - 1]} ${ym.slice(0, 4)}` : "";
+
+  const allarmi = [inRitardo.length, nonLetti.length, buchi.length, daRecuperare().length]
+    .reduce((a, b) => a + b, 0);
+
   return `
     <div class="banche">
       <button class="scheda${bancaAperta === "" ? " viva" : ""}" data-banca="">Tutto</button>
       ${banche.map((b) => `<button class="scheda${bancaAperta === b ? " viva" : ""}" data-banca="${esc(b)}">${esc(b)}</button>`).join("")}
     </div>
 
-    ${testata({
-      occhiello: bancaAperta || "Tutti i rapporti",
-      grande: formattaCentesimi(patrimonio),
-      sotto: `disponibile fra conti, prepagate e titoli${debiti > 0n
-        ? ` · <strong>${formattaCentesimi(debiti)}</strong> di carte ancora da saldare` : ""}`,
-    })}
+    <div class="bento">
+      <a class="riquadro principale largo2" href="#/movimenti">
+        <span class="etichetta">${esc(bancaAperta || "Patrimonio")}</span>
+        <p class="cifra">${formattaCentesimi(patrimonio)}</p>
+        <span class="sotto">fra conti, prepagate e titoli</span>
+      </a>
 
-    ${(() => {
+      <a class="riquadro" href="#/analisi">
+        <span class="etichetta">Speso a ${esc(nomeMese(meseOra).split(" ")[0] || "—")}</span>
+        <p class="cifra">${meseOra ? formattaCentesimi(spesaOra) : "—"}</p>
+        <span class="sotto">${spesaPrima > 0n
+          ? `${spesaOra > spesaPrima ? "▲" : "▼"} ${formattaCentesimi(spesaOra > spesaPrima ? spesaOra - spesaPrima : spesaPrima - spesaOra)} rispetto a ${esc(nomeMese(meseMeno(meseOra, 1)).split(" ")[0])}`
+          : "nessun mese prima con cui confrontarlo"}</span>
+        ${scia.length ? `<span class="scia">${scia.map((ym, i) => {
+          const h = Number((usciteDi(ym) * 100n) / massimo);
+          return `<i class="${i === scia.length - 1 ? "ultimo" : ""}" style="height:${Math.max(4, h)}%"></i>`;
+        }).join("")}</span>` : ""}
+      </a>
+
+      <a class="riquadro${debiti > 0n ? " attenzione" : ""}" href="#/rapporti">
+        <span class="etichetta">Carte da saldare</span>
+        <p class="cifra">${formattaCentesimi(debiti)}</p>
+        <span class="sotto">${debiti > 0n
+          ? "già speso, non ancora addebitato sul conto"
+          : "nessuna carta ha un debito aperto"}</span>
+      </a>
+
+      ${(() => {
       /* Gli avvisi stanno DOPO i soldi, non prima. La prima cosa che si vuole
          sapere aprendo l'app è quanto c'è; le cose da sistemare vengono
          subito dopo, ma vengono dopo. E stanno in una cassetta sola, in
@@ -1725,13 +1924,18 @@ function paginaSituazione() {
         voci.unshift({ g: "err", via: "#/movimenti", conto: diff.id, n: "",
           testo: `<strong>${formattaCentesimi(quanto < 0n ? -quanto : quanto)}</strong> che i documenti non fanno tornare` });
       if (!voci.length)
-        return `<div class="avviso ok">Tutto quadra: nessun documento fuori, nessun periodo scoperto.</div>`;
-      return `<div class="card allerte">
+        return `<div class="riquadro largo4">
+          <span class="etichetta">Controlli</span>
+          <p class="cifra bene">Tutto quadra</p>
+          <span class="sotto">nessun documento fuori dai conti, nessun periodo scoperto</span>
+        </div>`;
+      return `<div class="card allerte largo4" style="margin:0">
         ${voci.map((v) => `<a class="allerta ${v.g}" href="${v.via}"${
           v.conto ? ` data-vai="conto:${esc(v.conto)}"` : ""}>
           ${v.n ? `<b>${v.n}</b> ` : ""}${v.testo}</a>`).join("")}
       </div>`;
     })()}
+    </div>
 
     <div class="card quadro">
       <div class="disegno">
