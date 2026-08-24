@@ -605,7 +605,7 @@ table.dati td.num { text-align:right; }
 
 /* La versione del programma. Serve a una cosa sola: accorgersi che quella
    pubblicata è più nuova di quella aperta. Va alzata a ogni pubblicazione. */
-const VERSIONE = 10;
+const VERSIONE = 11;
 
 const BASE = "https://dvkkxqfcxeebqlmtryxi.supabase.co";
 const ANON = "sb_publishable_PIvO1WmssAHUXXwy6nmz_w_W_tPxtNG";
@@ -787,11 +787,51 @@ async function modifica(tabella, filtro, campi) {
   if (!r.ok) throw new Error(`${tabella}: ${await r.text()}`);
 }
 
-async function cancella(tabella, filtro) {
+/* Svuotare una tabella in un colpo solo funziona finché le righe sono poche.
+   A ventimila movimenti il database si ferma da sé dopo qualche secondo
+   («statement timeout», codice 57014) e non cancella NIENTE: una cancellazione
+   è atomica, o passa tutta o non passa affatto. Il rimedio non è aspettare di
+   più — non si può, il limite è del server — ma chiedere meno per volta.
+
+   Il taglio si fa per data, e la fetta si dimezza da sola finché non passa:
+   così non c'è un numero magico da indovinare, e il giorno in cui i movimenti
+   saranno centomila funzionerà lo stesso, solo con qualche giro in più. */
+const TAGLIA_PER_DATA = { ledger_transaction: "economic_date" };
+const SCADUTO = /57014|statement timeout/i;
+
+async function cancellaTutto(tabella, filtro) {
   const r = await chiama(`/rest/v1/${tabella}?${filtro}`, {
     method: "DELETE", headers: { prefer: "return=minimal" },
   });
-  if (!r.ok) throw new Error(`${tabella}: ${await r.text()}`);
+  return r.ok ? null : await r.text();
+}
+
+async function cancellaFetta(tabella, filtro, colonna, dal, al) {
+  const iso = (t) => new Date(t).toISOString().slice(0, 10);
+  const errore = await cancellaTutto(tabella,
+    `${filtro}&${colonna}=gte.${iso(dal)}&${colonna}=lt.${iso(al)}`);
+  if (!errore) return;
+  if (!SCADUTO.test(errore)) throw new Error(`${tabella}: ${errore}`);
+  const giorno = 86400000;
+  if (al - dal <= giorno)
+    throw new Error(`${tabella}: troppe righe nello stesso giorno (${iso(dal)}) per cancellarle insieme`);
+  const mezzo = dal + Math.ceil((al - dal) / 2 / giorno) * giorno;
+  await cancellaFetta(tabella, filtro, colonna, dal, mezzo);
+  await cancellaFetta(tabella, filtro, colonna, mezzo, al);
+}
+
+async function cancella(tabella, filtro) {
+  const errore = await cancellaTutto(tabella, filtro);
+  if (!errore) return;
+  const colonna = TAGLIA_PER_DATA[tabella];
+  if (!SCADUTO.test(errore) || !colonna) throw new Error(`${tabella}: ${errore}`);
+  /* Dal 1990 a un anno avanti: qualunque data plausibile ci sta dentro, e
+     quello che sta fuori resta — se restasse davvero, il conteggio finale lo
+     direbbe. */
+  await cancellaFetta(tabella, filtro, colonna,
+    Date.UTC(1990, 0, 1), Date.UTC(new Date().getUTCFullYear() + 1, 0, 1));
+  const rimaste = await cancellaTutto(tabella, filtro);
+  if (rimaste) throw new Error(`${tabella}: ${rimaste}`);
 }
 
 async function traccia(azione, genere, soggetto, motivo) {
