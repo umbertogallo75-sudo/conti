@@ -427,6 +427,16 @@ a.riquadro:hover, button.riquadro:hover { transform:translateY(-3px); box-shadow
 }
 .scia i.ultimo { opacity:1; }
 
+/* Le ossa dello scheletro: barre grigie che respirano piano. Non girano e
+   non lampeggiano — devono dire «sto arrivando», non chiedere attenzione. */
+.osso {
+  display:block; height:0.85rem; margin:0.45rem 0; border-radius:999px;
+  background:linear-gradient(90deg, var(--surface-2), var(--bordo-scuro), var(--surface-2));
+  background-size:200% 100%; animation:respiro 1.6s ease-in-out infinite;
+}
+.riquadro.principale .osso:nth-child(2) { height:2.2rem; }
+@keyframes respiro { 0%,100% { background-position:0% 0; } 50% { background-position:-100% 0; } }
+
 .riquadro.allarme { border-color:color-mix(in srgb, var(--stop) 45%, transparent); }
 .riquadro.attenzione { border-color:color-mix(in srgb, var(--warn) 45%, transparent); }
 .riquadro .cifra.male { color:var(--stop); }
@@ -753,7 +763,7 @@ table.dati td.num { text-align:right; }
 
 /* La versione del programma. Serve a una cosa sola: accorgersi che quella
    pubblicata è più nuova di quella aperta. Va alzata a ogni pubblicazione. */
-const VERSIONE = 13;
+const VERSIONE = 14;
 
 const BASE = "https://dvkkxqfcxeebqlmtryxi.supabase.co";
 const ANON = "sb_publishable_PIvO1WmssAHUXXwy6nmz_w_W_tPxtNG";
@@ -1846,10 +1856,31 @@ function paginaSituazione() {
     return `${a}-${String(m).padStart(2, "0")}`;
   };
   const meseOra = ultimoGiorno.slice(0, 7);
-  /* aggrega() restituisce i mesi già ordinati, come coppie: qui servono a
-     caso, quindi si rimettono in una mappa. */
-  const dodici = meseOra ? new Map(aggrega(`${meseMeno(meseOra, 11)}-01`, ultimoGiorno).mesi) : null;
-  const usciteDi = (ym) => dodici?.get(ym)?.uscite ?? 0n;
+  /* ── Attenzione: non tutta la spesa ha un mese ───────────────────────────
+     Quando di una carta manca l'estratto, il mastro chiude il conto di
+     transito con UNA scrittura sola, datata oggi, che vale tutti i mesi
+     mancanti insieme. È spesa vera — quei soldi sono usciti — ma NON è spesa
+     di questo mese: metterla nel riquadro «speso ad agosto» direbbe che in un
+     mese sono usciti duecentomila euro, che è falso.
+
+     Quelle scritture restano nei totali generali e sono già contate a parte
+     («spesa senza dettaglio»). Qui, dove si divide per mese, si tengono
+     fuori: un mese sbagliato è peggio di un mese mancante. */
+  const SENZA_MESE = /non ho l'estratto|non risultano|^Saldata dal conto/i;
+  const usciteMese = new Map();
+  let senzaMese = 0n;
+  for (const t of dati.movimenti) {
+    let quanto = 0n;
+    for (const sc of (indice.perMovimento.get(t.id) ?? [])) {
+      const c = indice.perConto.get(sc.account_id);
+      if (c && c.kind === "expense") quanto += BigInt(sc.amount_minor);
+    }
+    if (quanto <= 0n) continue;
+    if (SENZA_MESE.test(t.description ?? "")) { senzaMese += quanto; continue; }
+    const k = t.economic_date.slice(0, 7);
+    usciteMese.set(k, (usciteMese.get(k) ?? 0n) + quanto);
+  }
+  const usciteDi = (ym) => usciteMese.get(ym) ?? 0n;
   const scia = meseOra ? Array.from({ length: 12 }, (_, i) => meseMeno(meseOra, 11 - i)) : [];
   const massimo = scia.reduce((m, ym) => (usciteDi(ym) > m ? usciteDi(ym) : m), 1n);
   const spesaOra = usciteDi(meseOra);
@@ -1857,9 +1888,6 @@ function paginaSituazione() {
   const MESI_IT = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno",
     "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"];
   const nomeMese = (ym) => ym ? `${MESI_IT[+ym.slice(5, 7) - 1]} ${ym.slice(0, 4)}` : "";
-
-  const allarmi = [inRitardo.length, nonLetti.length, buchi.length, daRecuperare().length]
-    .reduce((a, b) => a + b, 0);
 
   return `
     <div class="banche">
@@ -1879,7 +1907,8 @@ function paginaSituazione() {
         <p class="cifra">${meseOra ? formattaCentesimi(spesaOra) : "—"}</p>
         <span class="sotto">${spesaPrima > 0n
           ? `${spesaOra > spesaPrima ? "▲" : "▼"} ${formattaCentesimi(spesaOra > spesaPrima ? spesaOra - spesaPrima : spesaPrima - spesaOra)} rispetto a ${esc(nomeMese(meseMeno(meseOra, 1)).split(" ")[0])}`
-          : "nessun mese prima con cui confrontarlo"}</span>
+          : "nessun mese prima con cui confrontarlo"}${senzaMese > 0n
+          ? `<br><small>fuori conteggio ${formattaCentesimi(senzaMese)} di spesa che non ha un mese</small>` : ""}</span>
         ${scia.length ? `<span class="scia">${scia.map((ym, i) => {
           const h = Number((usciteDi(ym) * 100n) / massimo);
           return `<i class="${i === scia.length - 1 ? "ultimo" : ""}" style="height:${Math.max(4, h)}%"></i>`;
@@ -4646,6 +4675,18 @@ function apriMovimento(scheda) {
 const TRASLOCHI = { letture: "documenti/letture", solleciti: "documenti/solleciti",
                     carica: "documenti/carica" };
 
+/* La forma della prima pagina, vuota, mentre i dati arrivano. Non finge di
+   avere dei numeri: mostra dove staranno. */
+function scheletro() {
+  const barra = (l) => `<span class="osso" style="width:${l}"></span>`;
+  return `<div class="bento" aria-busy="true" aria-label="Sto leggendo i dati">
+    <div class="riquadro principale largo2">${barra("38%")}${barra("74%")}${barra("52%")}</div>
+    <div class="riquadro">${barra("52%")}${barra("80%")}${barra("64%")}</div>
+    <div class="riquadro">${barra("46%")}${barra("72%")}${barra("58%")}</div>
+    <div class="riquadro largo4">${barra("64%")}${barra("40%")}</div>
+  </div>`;
+}
+
 function disegna() {
   const [p, arg] = percorso();
   if (TRASLOCHI[p]) { location.hash = `#/${TRASLOCHI[p]}`; return; }
@@ -4942,6 +4983,12 @@ async function mostraApp() {
   document.getElementById("accesso").hidden = true;
   document.getElementById("app").hidden = false;
   document.getElementById("sottotitolo").textContent = sessione.utente.email;
+  /* Leggere ventimila movimenti dal database richiede una ventina di secondi.
+     Finora in quei venti secondi la pagina restava BIANCA: chi apre l'app non
+     vede una cosa che sta caricando, vede una cosa rotta, e ricarica — che
+     ricomincia tutto da capo. Meglio mostrare la forma di quello che sta per
+     arrivare. */
+  document.getElementById("pagina").innerHTML = scheletro();
   try {
     await ricarica();
   } catch (e) {
