@@ -605,7 +605,7 @@ table.dati td.num { text-align:right; }
 
 /* La versione del programma. Serve a una cosa sola: accorgersi che quella
    pubblicata è più nuova di quella aperta. Va alzata a ogni pubblicazione. */
-const VERSIONE = 11;
+const VERSIONE = 12;
 
 const BASE = "https://dvkkxqfcxeebqlmtryxi.supabase.co";
 const ANON = "sb_publishable_PIvO1WmssAHUXXwy6nmz_w_W_tPxtNG";
@@ -820,18 +820,28 @@ async function cancellaFetta(tabella, filtro, colonna, dal, al) {
   await cancellaFetta(tabella, filtro, colonna, mezzo, al);
 }
 
+/* Quante righe restano. Serve a chiudere il cerchio: dopo aver cancellato a
+   fette, dire «fatto» senza aver contato sarebbe una verifica che si supera
+   anche quando è andata male. */
+async function quante(tabella, filtro) {
+  const r = await chiama(`/rest/v1/${tabella}?${filtro}&select=id`, {
+    method: "HEAD", headers: { prefer: "count=exact", range: "0-0" },
+  });
+  const coda = (r.headers.get("content-range") ?? "").split("/")[1];
+  return coda && coda !== "*" ? Number(coda) : null;
+}
+
 async function cancella(tabella, filtro) {
   const errore = await cancellaTutto(tabella, filtro);
   if (!errore) return;
   const colonna = TAGLIA_PER_DATA[tabella];
   if (!SCADUTO.test(errore) || !colonna) throw new Error(`${tabella}: ${errore}`);
-  /* Dal 1990 a un anno avanti: qualunque data plausibile ci sta dentro, e
-     quello che sta fuori resta — se restasse davvero, il conteggio finale lo
-     direbbe. */
-  await cancellaFetta(tabella, filtro, colonna,
-    Date.UTC(1990, 0, 1), Date.UTC(new Date().getUTCFullYear() + 1, 0, 1));
-  const rimaste = await cancellaTutto(tabella, filtro);
-  if (rimaste) throw new Error(`${tabella}: ${rimaste}`);
+  /* Un intervallo volutamente più largo di qualunque data che una banca possa
+     scrivere: le fette vuote passano subito, quindi allargarlo non costa. */
+  await cancellaFetta(tabella, filtro, colonna, Date.UTC(1970, 0, 1), Date.UTC(2100, 0, 1));
+  const restano = await quante(tabella, filtro);
+  if (restano) throw new Error(
+    `${tabella}: restano ${restano} righe con una data fuori da 1970–2100`);
 }
 
 async function traccia(azione, genere, soggetto, motivo) {
